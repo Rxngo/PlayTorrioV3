@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../models/stream/stream_model.dart';
 import '../p2p/p2p_settings_service.dart';
-import '../stream/stream_health_checker.dart';
+import 'builtin_providers_settings_service.dart';
 
 abstract class StreamScraper {
   String get name;
+  String get providerId => runtimeType.toString().replaceAll('Scraper', '').toLowerCase();
+  String get providerName => runtimeType.toString().replaceAll('Scraper', '');
 
   /// Yields sources progressively one-by-one as they are resolved.
   Stream<StreamSource> scrapeStream({
@@ -70,27 +72,49 @@ class ScraperManager {
     final controller = StreamController<StreamSource>();
 
     final p2pAllowed = P2pSettingsService.isP2pEnabled.value;
-    final activeScrapers = _scrapers.where((s) {
-      if (!p2pAllowed && s.name == 'PlayTorrio') {
-        return false;
-      }
-      return true;
-    }).toList();
+    final isCustom = BuiltinProvidersSettingsService.instance.isCustom;
+
+    final List<StreamScraper> activeScrapers;
+    if (isCustom) {
+      final filtered = _scrapers.where((s) {
+        if (!p2pAllowed && s.name == 'PlayTorrio') return false;
+        if (s.name == 'PlayTorrioHTTP') {
+          return BuiltinProvidersSettingsService.instance.isProviderEnabled(s.providerId);
+        }
+        return true;
+      }).toList();
+
+      filtered.sort((a, b) {
+        if (a.name == 'PlayTorrioHTTP' && b.name == 'PlayTorrioHTTP') {
+          final rankA = BuiltinProvidersSettingsService.instance.getProviderRank(a.providerId);
+          final rankB = BuiltinProvidersSettingsService.instance.getProviderRank(b.providerId);
+          return rankA.compareTo(rankB);
+        }
+        return 0;
+      });
+      activeScrapers = filtered;
+    } else {
+      activeScrapers = _scrapers.where((s) {
+        if (!p2pAllowed && s.name == 'PlayTorrio') {
+          return false;
+        }
+        return true;
+      }).toList();
+    }
 
     if (activeScrapers.isEmpty) {
       controller.close();
       return controller.stream;
     }
 
-    debugPrint('[ScraperManager] Scraping across ${activeScrapers.length} active scrapers (${activeScrapers.map((s) => s.runtimeType).join(", ")}) for "$title" (P2P enabled: $p2pAllowed)...');
+    debugPrint('[ScraperManager] Scraping across ${activeScrapers.length} active scrapers (${activeScrapers.map((s) => s.runtimeType).join(", ")}) for "$title" (P2P enabled: $p2pAllowed, Custom mode: $isCustom)...');
 
     int pendingScrapers = activeScrapers.length;
-    int pendingHealthChecks = 0;
     final seenHashes = <String>{};
     final seenUrls = <String>{};
 
     void checkClose() {
-      if (pendingScrapers == 0 && pendingHealthChecks == 0 && !controller.isClosed) {
+      if (pendingScrapers <= 0 && !controller.isClosed) {
         controller.close();
       }
     }
@@ -106,8 +130,15 @@ class ScraperManager {
         imdbId: imdbId,
       )
           .listen(
-        (source) {
+        (rawSource) {
           if (controller.isClosed) return;
+
+          final source = (rawSource.providerId == null || rawSource.providerId!.isEmpty)
+              ? rawSource.copyWith(
+                  providerId: scraper.providerId,
+                  providerName: scraper.providerName,
+                )
+              : rawSource;
 
           // If P2P is disabled, strictly discard any torrent source
           if (!p2pAllowed &&
@@ -129,18 +160,8 @@ class ScraperManager {
           if (rawUrl != null && rawUrl.startsWith('http')) {
             if (seenUrls.contains(rawUrl)) return;
             seenUrls.add(rawUrl);
-
-            pendingHealthChecks++;
-            StreamHealthChecker.isAlive(source).then((alive) {
-              if (alive && !controller.isClosed) {
-                controller.add(source);
-              } else {
-                debugPrint('[ScraperManager] Discarded dead/unreachable stream: ${source.title} (${source.url})');
-              }
-            }).catchError((_) {}).whenComplete(() {
-              pendingHealthChecks--;
-              checkClose();
-            });
+            // Emit immediately as streams are found so the UI displays them progressively!
+            controller.add(source);
           } else {
             controller.add(source);
           }

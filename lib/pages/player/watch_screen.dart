@@ -18,6 +18,7 @@ import './player_screen.dart';
 import '../../services/addon/addon_manager.dart';
 import '../../services/stream/stream_service.dart';
 import '../../services/theme/glass_settings.dart';
+import '../../services/scraper/builtin_providers_settings_service.dart';
 import '../../widgets/common/performance_liquid_lens.dart';
 import '../settings/settings_page.dart';
 import '../details/details_page.dart';
@@ -175,10 +176,14 @@ class _WatchScreenState extends State<WatchScreen>
       )) {
         if (!mounted) return;
         _pendingSources.add(source);
-        _sourceBatchTimer ??= Timer(
-          const Duration(milliseconds: 60),
-          _flushPendingSources,
-        );
+        if (_sources.isEmpty) {
+          _flushPendingSources();
+        } else {
+          _sourceBatchTimer ??= Timer(
+            const Duration(milliseconds: 50),
+            _flushPendingSources,
+          );
+        }
       }
     } catch (_) {}
 
@@ -197,7 +202,6 @@ class _WatchScreenState extends State<WatchScreen>
     _pendingSources.clear();
     setState(() {
       _sources.addAll(batch);
-      _isLoadingSources = false;
     });
   }
 
@@ -205,7 +209,7 @@ class _WatchScreenState extends State<WatchScreen>
   String? _selectedSizeFilter;
   String _selectedTypeFilter = 'all'; // 'all', 'debrid', 'torrent', 'direct'
   String _selectedSeederFilter = 'all'; // 'all', 'most', '50+', '20+', '5+', '1+'
-  String _selectedAudioFilter = 'all'; // 'all', 'multi', 'english', 'hindi', 'german', 'french', 'spanish', 'russian', 'japanese', 'italian'
+  String _selectedAudioFilter = 'all'; // 'all', 'multi', 'english', 'hindi', 'german', 'french', 'spanish', 'spanish_castilian', 'spanish_latino', 'russian', 'japanese', 'italian'
 
   List<StreamSource> get _filteredSources {
     var list = List<StreamSource>.from(_sources);
@@ -282,25 +286,55 @@ class _WatchScreenState extends State<WatchScreen>
 
     // Cached dynamic addon priority lookup from user's installed addons order
     final addonOrder = _addonOrder;
+    final isCustomBuiltin = BuiltinProvidersSettingsService.instance.isCustom;
 
-    if (_selectedSeederFilter == 'most') {
-      list.sort((a, b) => (b.seeders ?? 0).compareTo(a.seeders ?? 0));
-    } else if (_selectedSizeFilter == 'largest') {
-      list.sort((a, b) => (b.sizeBytes ?? 0).compareTo(a.sizeBytes ?? 0));
-    } else if (_selectedSizeFilter == 'smallest') {
-      list.sort((a, b) => (a.sizeBytes ?? double.infinity).compareTo(b.sizeBytes ?? double.infinity));
-    } else {
-      list.sort((a, b) {
-        final orderA = addonOrder[a.addonName.toLowerCase()] ?? 999;
-        final orderB = addonOrder[b.addonName.toLowerCase()] ?? 999;
-        if (orderA != orderB) {
-          return orderA.compareTo(orderB);
+    list.sort((a, b) {
+      final isHttpA = a.addonName.toLowerCase() == 'playtorriohttp';
+      final isHttpB = b.addonName.toLowerCase() == 'playtorriohttp';
+
+      // When custom Built-in providers mode is active, provider rank strictly dictates order
+      if (isCustomBuiltin && isHttpA && isHttpB) {
+        final pidA = a.providerId ?? BuiltinProvidersSettingsService.detectProviderId(a);
+        final pidB = b.providerId ?? BuiltinProvidersSettingsService.detectProviderId(b);
+        final rankA = BuiltinProvidersSettingsService.instance.getProviderRank(pidA);
+        final rankB = BuiltinProvidersSettingsService.instance.getProviderRank(pidB);
+        if (rankA != rankB) {
+          return rankA.compareTo(rankB);
         }
+        // Within the same provider, sort by secondary filter / quality:
+        if (_selectedSeederFilter == 'most') {
+          return (b.seeders ?? 0).compareTo(a.seeders ?? 0);
+        } else if (_selectedSizeFilter == 'largest') {
+          return (b.sizeBytes ?? 0).compareTo(a.sizeBytes ?? 0);
+        } else if (_selectedSizeFilter == 'smallest') {
+          return (a.sizeBytes ?? double.infinity).compareTo(b.sizeBytes ?? double.infinity);
+        } else {
+          final qComp = b.qualityRank.compareTo(a.qualityRank);
+          if (qComp != 0) return qComp;
+          return (b.seeders ?? 0).compareTo(a.seeders ?? 0);
+        }
+      }
+
+      // Addon-level order comparison
+      final orderA = addonOrder[a.addonName.toLowerCase()] ?? 999;
+      final orderB = addonOrder[b.addonName.toLowerCase()] ?? 999;
+      if (orderA != orderB) {
+        return orderA.compareTo(orderB);
+      }
+
+      // Standard sort across streams of the same addon
+      if (_selectedSeederFilter == 'most') {
+        return (b.seeders ?? 0).compareTo(a.seeders ?? 0);
+      } else if (_selectedSizeFilter == 'largest') {
+        return (b.sizeBytes ?? 0).compareTo(a.sizeBytes ?? 0);
+      } else if (_selectedSizeFilter == 'smallest') {
+        return (a.sizeBytes ?? double.infinity).compareTo(b.sizeBytes ?? double.infinity);
+      } else {
         final qComp = b.qualityRank.compareTo(a.qualityRank);
         if (qComp != 0) return qComp;
         return (b.seeders ?? 0).compareTo(a.seeders ?? 0);
-      });
-    }
+      }
+    });
     return list;
   }
 
@@ -545,7 +579,9 @@ class _WatchScreenState extends State<WatchScreen>
                         ),
                         Text(
                           _isLoadingSources
-                              ? 'Searching sources...'
+                              ? (filtered.isEmpty
+                                  ? 'Searching sources...'
+                                  : '${filtered.length} found · Searching...')
                               : '${filtered.length} source${filtered.length == 1 ? '' : 's'} found',
                           style: const TextStyle(
                             color: _C.textTertiary,
@@ -1126,7 +1162,9 @@ class _WatchScreenState extends State<WatchScreen>
             ),
             Text(
               _isLoadingSources
-                  ? 'Searching sources...'
+                  ? (filtered.isEmpty
+                      ? 'Searching sources...'
+                      : '${filtered.length} found · Searching...')
                   : '${filtered.length} source${filtered.length == 1 ? '' : 's'} found',
               style: const TextStyle(color: _C.textTertiary, fontSize: 12),
             ),
@@ -1885,8 +1923,12 @@ class _WatchScreenState extends State<WatchScreen>
         return '🇩🇪 German';
       case 'french':
         return '🇫🇷 French';
+      case 'spanish_castilian':
+        return '🇪🇸 Spanish (Castilian)';
+      case 'spanish_latino':
+        return '🇲🇽 Spanish (Latin)';
       case 'spanish':
-        return '🇪🇸 Spanish';
+        return '🌎 All Spanish';
       case 'russian':
         return '🇷🇺 Russian';
       case 'japanese':
@@ -1974,7 +2016,7 @@ class _WatchScreenState extends State<WatchScreen>
       ancestor: overlay,
     );
 
-    const double dialogWidth = 230.0;
+    const double dialogWidth = 240.0;
     final double spaceBelow = overlay.size.height - (buttonOffset.dy + button.size.height + 8) - 16;
     final double spaceAbove = buttonOffset.dy - 16;
     final bool openAbove = spaceBelow < 280 && spaceAbove > spaceBelow;
@@ -2041,7 +2083,9 @@ class _WatchScreenState extends State<WatchScreen>
                             _buildAudioDropdownItem('🇮🇳 Hindi / Indian', 'hindi'),
                             _buildAudioDropdownItem('🇩🇪 German', 'german'),
                             _buildAudioDropdownItem('🇫🇷 French', 'french'),
-                            _buildAudioDropdownItem('🇪🇸 Spanish', 'spanish'),
+                            _buildAudioDropdownItem('🇪🇸 Spanish (Castilian)', 'spanish_castilian'),
+                            _buildAudioDropdownItem('🇲🇽 Spanish (Latin)', 'spanish_latino'),
+                            _buildAudioDropdownItem('🌎 All Spanish', 'spanish'),
                             _buildAudioDropdownItem('🇷🇺 Russian', 'russian'),
                             _buildAudioDropdownItem('🇯🇵 Japanese', 'japanese'),
                             _buildAudioDropdownItem('🇮🇹 Italian', 'italian'),
@@ -2300,7 +2344,25 @@ class _WatchScreenState extends State<WatchScreen>
                     },
                   ),
                   _buildBottomSheetItem(
-                    title: '🇪🇸 Spanish',
+                    title: '🇪🇸 Spanish (Castilian)',
+                    isSelected: _selectedAudioFilter == 'spanish_castilian',
+                    activeColor: const Color(0xFFFAB005),
+                    onTap: () {
+                      setState(() => _selectedAudioFilter = 'spanish_castilian');
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _buildBottomSheetItem(
+                    title: '🇲🇽 Spanish (Latin)',
+                    isSelected: _selectedAudioFilter == 'spanish_latino',
+                    activeColor: const Color(0xFF20C997),
+                    onTap: () {
+                      setState(() => _selectedAudioFilter = 'spanish_latino');
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _buildBottomSheetItem(
+                    title: '🌎 All Spanish',
                     isSelected: _selectedAudioFilter == 'spanish',
                     activeColor: const Color(0xFFFAB005),
                     onTap: () {
@@ -2783,6 +2845,10 @@ class _SourceCardState extends State<_SourceCard> {
         audioBadgeColor = const Color(0xFFFFD43B);
       } else if (audioBadge.contains('FRE')) {
         audioBadgeColor = const Color(0xFF4DABF7);
+      } else if (audioBadge.contains('CAST')) {
+        audioBadgeColor = const Color(0xFFFAB005);
+      } else if (audioBadge.contains('LAT')) {
+        audioBadgeColor = const Color(0xFF20C997);
       } else if (audioBadge.contains('SPA')) {
         audioBadgeColor = const Color(0xFFFAB005);
       } else if (audioBadge.contains('RUS')) {
@@ -2899,9 +2965,13 @@ class _SourceCardState extends State<_SourceCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          s.name != null && s.name!.isNotEmpty
-                              ? s.name!
-                              : s.addonName,
+                          (s.addonName.toLowerCase() == 'playtorriohttp' &&
+                                  s.providerName != null &&
+                                  s.providerName!.isNotEmpty)
+                              ? 'PlayTorrioHTTP · ${s.providerName}'
+                              : (s.name != null && s.name!.isNotEmpty
+                                  ? s.name!
+                                  : s.addonName),
                           style: const TextStyle(
                             color: _C.textPrimary,
                             fontSize: 13,

@@ -54,6 +54,8 @@ import '../scraper/sites/vixsrc.dart';
 import '../scraper/sites/xpass.dart';
 import '../scraper/sites/a111477.dart';
 import '../scraper/sites/vadapav.dart';
+import '../scraper/sites/zxcstream.dart';
+import '../scraper/sites/hindmoviez.dart';
 import '../anime/anime_scraper_service.dart';
 import '../anime_arabic/anime_arabic_service.dart';
 import '../anime_arabic/anime_arabic_extractor.dart';
@@ -115,6 +117,8 @@ class StreamService {
     ScraperManager.instance.registerScraper(VidLinkScraper());
     ScraperManager.instance.registerScraper(VixSrcScraper());
     ScraperManager.instance.registerScraper(XPassScraper());
+    ScraperManager.instance.registerScraper(ZxcStreamScraper());
+    ScraperManager.instance.registerScraper(HindMoviezScraper());
   }
 
   /// Fetches streams from all active stream-capable addons for the given

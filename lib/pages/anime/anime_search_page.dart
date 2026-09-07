@@ -445,10 +445,12 @@ class _AnimeSearchPageState extends State<AnimeSearchPage> {
   }
 
   void _openDetails(AnimeMedia anime) {
-    if (_isArabicMode || _arabicCardsMap.containsKey(anime.id)) {
+    if (_isArabicMode || anime.isArabic || _arabicCardsMap.containsKey(anime.id)) {
       final card = _arabicCardsMap[anime.id] ??
           ArabicAnimeCard(
-            slug: anime.titleEnglish.toLowerCase().replaceAll(' ', '-'),
+            slug: (anime.slug != null && anime.slug!.isNotEmpty)
+                ? anime.slug!
+                : anime.titleEnglish.toLowerCase().replaceAll(' ', '-'),
             title: anime.displayTitle,
             cover: anime.coverUrl,
           );

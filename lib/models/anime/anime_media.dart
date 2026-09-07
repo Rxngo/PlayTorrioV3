@@ -29,6 +29,8 @@ class AnimeMedia {
   final List<AnimeCharacter> characters;
   final List<AnimeRelation> relations;
   final List<AnimeMedia> recommendations;
+  final String? slug;
+  final bool isArabic;
 
   const AnimeMedia({
     required this.id,
@@ -61,6 +63,8 @@ class AnimeMedia {
     this.characters = const [],
     this.relations = const [],
     this.recommendations = const [],
+    this.slug,
+    this.isArabic = false,
   });
 
   String get displayTitle {

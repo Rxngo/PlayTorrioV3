@@ -173,10 +173,12 @@ class _AnimePageState extends State<AnimePage> {
   }
 
   void _playEpisode(AnimeMedia anime, int episodeNumber) {
-    if (_isArabicMode || _arabicCards.containsKey(anime.id)) {
+    if (_isArabicMode || anime.isArabic || _arabicCards.containsKey(anime.id)) {
       final card = _arabicCards[anime.id] ??
           ArabicAnimeCard(
-            slug: anime.titleEnglish.toLowerCase().replaceAll(' ', '-'),
+            slug: (anime.slug != null && anime.slug!.isNotEmpty)
+                ? anime.slug!
+                : anime.titleEnglish.toLowerCase().replaceAll(' ', '-'),
             title: anime.displayTitle,
             cover: anime.coverUrl,
           );
@@ -220,10 +222,12 @@ class _AnimePageState extends State<AnimePage> {
   }
 
   void _openDetails(AnimeMedia anime, [int? preferredEpisode]) {
-    if (_isArabicMode || _arabicCards.containsKey(anime.id)) {
+    if (_isArabicMode || anime.isArabic || _arabicCards.containsKey(anime.id)) {
       final card = _arabicCards[anime.id] ??
           ArabicAnimeCard(
-            slug: anime.titleEnglish.toLowerCase().replaceAll(' ', '-'),
+            slug: (anime.slug != null && anime.slug!.isNotEmpty)
+                ? anime.slug!
+                : anime.titleEnglish.toLowerCase().replaceAll(' ', '-'),
             title: anime.displayTitle,
             cover: anime.coverUrl,
           );

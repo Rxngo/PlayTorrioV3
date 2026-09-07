@@ -14,12 +14,14 @@ import 'appearance_settings_page.dart';
 import 'video_settings_page.dart';
 import 'debrid_settings_page.dart';
 import 'addons_settings_page.dart';
+import 'builtin_providers_settings_page.dart';
 import 'trakt_settings_page.dart';
 import 'simkl_settings_page.dart';
 import 'updates_settings_page.dart';
 import 'about_settings_page.dart';
 import '../../services/player/player_settings.dart';
 import '../../services/p2p/p2p_settings_service.dart';
+import '../../services/scraper/builtin_providers_settings_service.dart';
 import '../../widgets/p2p/p2p_warning_dialog.dart';
 import '../../services/discord/discord_rpc_service.dart';
 import '../../services/backup/backup_restore_service.dart';
@@ -271,6 +273,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    BuiltinProvidersSettingsService.instance.init();
     _loadOverviewState();
   }
 
@@ -282,8 +285,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final pkg = await PackageInfo.fromPlatform().catchError((_) => PackageInfo(
           appName: 'PlayTorrio',
           packageName: 'com.playtorrio',
-          version: '1.1.3',
-          buildNumber: '14',
+          version: '1.1.4',
+          buildNumber: '15',
         ));
 
     if (mounted) {
@@ -476,6 +479,25 @@ class _SettingsPageState extends State<SettingsPage> {
                 badgeText: '$addonCount Installed',
                 badgeColor: const Color(0xFF10B981),
                 onTap: () => _navigateTo(const AddonsSettingsPage()),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 4. Built-in Providers (PlayTorrioHTTP)
+              ListenableBuilder(
+                listenable: BuiltinProvidersSettingsService.instance,
+                builder: (context, _) {
+                  final isCustom = BuiltinProvidersSettingsService.instance.isCustom;
+                  return _SettingsCategoryTile(
+                    icon: Icons.dns_rounded,
+                    iconColor: isCustom ? const Color(0xFF7C5CFF) : const Color(0xFF10B981),
+                    title: 'Built-in Providers',
+                    subtitle: 'PlayTorrioHTTP streaming sources, priority order & toggles',
+                    badgeText: isCustom ? 'Custom' : 'Default',
+                    badgeColor: isCustom ? const Color(0xFF7C5CFF) : const Color(0xFF10B981),
+                    onTap: () => _navigateTo(const BuiltinProvidersSettingsPage()),
+                  );
+                },
               ),
 
               const SizedBox(height: 12),

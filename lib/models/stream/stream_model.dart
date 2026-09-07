@@ -12,6 +12,8 @@ class StreamSource {
   final Map<String, dynamic>? behaviorHints;
   final List<String>? sources;
   final Map<String, String>? headers;
+  final String? providerId;
+  final String? providerName;
 
   StreamSource({
     this.name,
@@ -25,7 +27,41 @@ class StreamSource {
     this.behaviorHints,
     this.sources,
     this.headers,
+    this.providerId,
+    this.providerName,
   });
+
+  StreamSource copyWith({
+    String? name,
+    String? title,
+    String? url,
+    String? externalUrl,
+    String? description,
+    String? infoHash,
+    int? fileIdx,
+    String? addonName,
+    Map<String, dynamic>? behaviorHints,
+    List<String>? sources,
+    Map<String, String>? headers,
+    String? providerId,
+    String? providerName,
+  }) {
+    return StreamSource(
+      name: name ?? this.name,
+      title: title ?? this.title,
+      url: url ?? this.url,
+      externalUrl: externalUrl ?? this.externalUrl,
+      description: description ?? this.description,
+      infoHash: infoHash ?? this.infoHash,
+      fileIdx: fileIdx ?? this.fileIdx,
+      addonName: addonName ?? this.addonName,
+      behaviorHints: behaviorHints ?? this.behaviorHints,
+      sources: sources ?? this.sources,
+      headers: headers ?? this.headers,
+      providerId: providerId ?? this.providerId,
+      providerName: providerName ?? this.providerName,
+    );
+  }
 
   factory StreamSource.fromJson(Map<String, dynamic> json, String addonName) {
     Map<String, dynamic>? hints;
@@ -70,6 +106,8 @@ class StreamSource {
       behaviorHints: hints,
       sources: srcList,
       headers: headersMap,
+      providerId: json['providerId']?.toString(),
+      providerName: json['providerName']?.toString(),
     );
   }
 
@@ -127,8 +165,18 @@ class StreamSource {
     caseSensitive: false,
   );
 
+  static final RegExp _castilianRegex = RegExp(
+    r'\b(castellano|castellana|castilian|es[-_]es|spa[- ]?castellano|esp[- ]?castellano|audio[- ]?castellano|spanish\s*\(\s*spain\s*\)|español\s*de\s*españa|espanol\s*de\s*espana)\b(?![- ]?(?:sub|subbed|subs|subtitles))|\[cast\]|\(cast\)',
+    caseSensitive: false,
+  );
+
+  static final RegExp _latinoRegex = RegExp(
+    r'\b(latino|latina|latam|latin[- ]?audio|audio[- ]?latino|es[-_](?:la|419|mx|ar|co|cl)|spanish\s*\(\s*latin(?:\s*america)?\s*\)|español\s*latino|espanol\s*latino)\b(?![- ]?(?:sub|subbed|subs|subtitles))|(?<=[^a-z0-9]|^)lat(?=[^a-z0-9]|$)(?![- ]?(?:sub|subbed|subs|subtitles))',
+    caseSensitive: false,
+  );
+
   static final RegExp _spanishRegex = RegExp(
-    r'\b(spanish|espanol|español|cancun|latino|castellano|spa|esp)\b(?![- ]?(?:sub|subbed|subs|subtitles))',
+    r'\b(spanish|espanol|español|cancun|latino|latina|latam|castellano|castellana|castilian|spa|esp|es[-_](?:es|la|419|mx|ar|co|cl))\b(?![- ]?(?:sub|subbed|subs|subtitles))|(?<=[^a-z0-9]|^)lat(?=[^a-z0-9]|$)(?![- ]?(?:sub|subbed|subs|subtitles))|\[cast\]|\(cast\)',
     caseSensitive: false,
   );
 
@@ -153,7 +201,7 @@ class StreamSource {
   );
 
   /// Returns detected audio languages for this stream.
-  /// Standard keys: 'multi', 'english', 'hindi', 'german', 'french', 'spanish', 'russian', 'japanese', 'italian'.
+  /// Standard keys: 'multi', 'english', 'hindi', 'german', 'french', 'spanish', 'spanish_castilian', 'spanish_latino', 'russian', 'japanese', 'italian'.
   Set<String> getAudioLanguages({String? mediaTitle}) {
     final tags = <String>{};
     var fullText = '${title ?? ''} ${name ?? ''} ${description ?? ''}';
@@ -173,7 +221,15 @@ class StreamSource {
     if (_hindiIndianRegex.hasMatch(fullText)) tags.add('hindi');
     if (_germanRegex.hasMatch(fullText)) tags.add('german');
     if (_frenchRegex.hasMatch(fullText)) tags.add('french');
-    if (_spanishRegex.hasMatch(fullText)) tags.add('spanish');
+
+    final isCastilian = _castilianRegex.hasMatch(fullText);
+    final isLatino = _latinoRegex.hasMatch(fullText);
+    final isSpanish = isCastilian || isLatino || _spanishRegex.hasMatch(fullText);
+
+    if (isCastilian) tags.add('spanish_castilian');
+    if (isLatino) tags.add('spanish_latino');
+    if (isSpanish) tags.add('spanish');
+
     if (_russianRegex.hasMatch(fullText)) tags.add('russian');
     if (_japaneseRegex.hasMatch(fullText)) tags.add('japanese');
     if (_italianRegex.hasMatch(fullText)) tags.add('italian');
@@ -196,7 +252,30 @@ class StreamSource {
   /// Returns a clean UI badge label if a special or regional dub is detected.
   String? getAudioBadge({String? mediaTitle}) {
     final langs = getAudioLanguages(mediaTitle: mediaTitle);
-    if (langs.contains('multi')) return '🌐 MULTI';
+
+    // If both Spanish dubs are present
+    if (langs.contains('spanish_castilian') && langs.contains('spanish_latino')) {
+      return '🇪🇸 CAST / 🇲🇽 LAT';
+    }
+
+    // If multiple distinct regional language families are present with multi, badge as MULTI
+    final nonSpanishRegional = langs.where((l) =>
+        l != 'multi' &&
+        l != 'english' &&
+        l != 'spanish' &&
+        l != 'spanish_castilian' &&
+        l != 'spanish_latino').length;
+    final hasSpanish = langs.contains('spanish');
+    final distinctRegionalCount = nonSpanishRegional + (hasSpanish ? 1 : 0);
+
+    if (distinctRegionalCount > 1 && langs.contains('multi')) {
+      return '🌐 MULTI';
+    }
+
+    if (langs.contains('spanish_castilian')) return '🇪🇸 CAST';
+    if (langs.contains('spanish_latino')) return '🇲🇽 LAT';
+    if (langs.contains('spanish')) return '🇪🇸 SPA';
+
     if (langs.contains('hindi')) {
       final text = '${title ?? ''} ${name ?? ''} ${description ?? ''}'.toLowerCase();
       if (text.contains('telugu')) return '🇮🇳 TELUGU';
@@ -208,10 +287,10 @@ class StreamSource {
     }
     if (langs.contains('german')) return '🇩🇪 GER';
     if (langs.contains('french')) return '🇫🇷 FRE';
-    if (langs.contains('spanish')) return '🇪🇸 SPA';
     if (langs.contains('russian')) return '🇷🇺 RUS';
     if (langs.contains('japanese')) return '🇯🇵 JPN';
     if (langs.contains('italian')) return '🇮🇹 ITA';
+    if (langs.contains('multi')) return '🌐 MULTI';
 
     final text = '${title ?? ''} ${name ?? ''} ${description ?? ''}';
     if (RegExp(r'\b(eng|english)\b', caseSensitive: false).hasMatch(text)) {
