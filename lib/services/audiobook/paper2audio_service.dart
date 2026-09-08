@@ -144,7 +144,8 @@ class Paper2AudioService {
   }
 
   Future<String> _getAuthToken() async {
-    final email = '${_uuid()}@mailinator.com';
+    final cleanUid = _uuid().replaceAll('-', '');
+    final email = 'user_$cleanUid@gmail.com';
     final resp = await http.post(
       Uri.parse(
           'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$_firebaseKey'),

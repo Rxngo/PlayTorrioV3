@@ -48,7 +48,8 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
 
   Offset? _tapPosition;
 
-  String _portalSourceFilter = 'all'; // 'all', 'custom', 'cloud', 'reddit', 'fav'
+  String _portalSourceFilter =
+      'all'; // 'all', 'custom', 'cloud', 'reddit', 'fav'
 
   List<VerifiedPortal> get _filteredPortals {
     return _ctrl.verified.where((p) {
@@ -199,11 +200,18 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
 
   void _openModalCustomizer(BuildContext context) {
     final palette = AppThemeService.currentPalette.value;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = screenWidth < 520;
+
     showDialog(
       context: context,
       builder: (ctx) {
         return Dialog(
           backgroundColor: const Color(0xFF10131C),
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 14 : 32,
+            vertical: 24,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
             side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
@@ -211,14 +219,18 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: Padding(
-              padding: const EdgeInsets.all(22),
+              padding: EdgeInsets.all(isMobile ? 16 : 22),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.tune_rounded, color: palette.primaryColor, size: 20),
+                      Icon(
+                        Icons.tune_rounded,
+                        color: palette.primaryColor,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       const Text(
                         'Customize Portals Modal',
@@ -230,7 +242,11 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white54,
+                          size: 20,
+                        ),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
@@ -241,36 +257,45 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
 
                   const Text(
                     'Card Display Style',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   ValueListenableBuilder<PortalCardStyle>(
                     valueListenable: IptvSettings.portalCardStyle,
                     builder: (context, style, _) {
-                      return Row(
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: PortalCardStyle.values.map((s) {
                           final isSelected = s == style;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(s.label),
-                              selected: isSelected,
-                              selectedColor: palette.primaryColor.withValues(alpha: 0.25),
-                              backgroundColor: const Color(0xFF0D1017),
-                              labelStyle: TextStyle(
-                                color: isSelected ? palette.primaryColor : Colors.white70,
-                                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                                fontSize: 12,
-                              ),
-                              side: BorderSide(
-                                color: isSelected
-                                    ? palette.primaryColor.withValues(alpha: 0.6)
-                                    : Colors.white.withValues(alpha: 0.08),
-                              ),
-                              onSelected: (selected) {
-                                if (selected) IptvSettings.setPortalCardStyle(s);
-                              },
+                          return ChoiceChip(
+                            label: Text(s.label),
+                            selected: isSelected,
+                            selectedColor: palette.primaryColor.withValues(
+                              alpha: 0.25,
                             ),
+                            backgroundColor: const Color(0xFF0D1017),
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? palette.primaryColor
+                                  : Colors.white70,
+                              fontWeight: isSelected
+                                  ? FontWeight.w800
+                                  : FontWeight.w500,
+                              fontSize: 12,
+                            ),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? palette.primaryColor.withValues(alpha: 0.6)
+                                  : Colors.white.withValues(alpha: 0.08),
+                            ),
+                            onSelected: (selected) {
+                              if (selected) IptvSettings.setPortalCardStyle(s);
+                            },
                           );
                         }).toList(),
                       );
@@ -284,10 +309,14 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                     builder: (context, showExpiry, _) {
                       return SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Show Portal Expiry Date', style: TextStyle(color: Colors.white, fontSize: 13.5)),
+                        title: const Text(
+                          'Show Portal Expiry Date',
+                          style: TextStyle(color: Colors.white, fontSize: 13.5),
+                        ),
                         value: showExpiry,
                         activeColor: palette.primaryColor,
-                        onChanged: (val) => IptvSettings.setShowPortalExpiry(val),
+                        onChanged: (val) =>
+                            IptvSettings.setShowPortalExpiry(val),
                       );
                     },
                   ),
@@ -297,10 +326,14 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                     builder: (context, showConn, _) {
                       return SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Show Max Connections', style: TextStyle(color: Colors.white, fontSize: 13.5)),
+                        title: const Text(
+                          'Show Max Connections',
+                          style: TextStyle(color: Colors.white, fontSize: 13.5),
+                        ),
                         value: showConn,
                         activeColor: palette.primaryColor,
-                        onChanged: (val) => IptvSettings.setShowPortalConnections(val),
+                        onChanged: (val) =>
+                            IptvSettings.setShowPortalConnections(val),
                       );
                     },
                   ),
@@ -309,22 +342,34 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
 
                   const Text(
                     'Default Starting Tab',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   ValueListenableBuilder<int>(
                     valueListenable: IptvSettings.defaultPortalTab,
                     builder: (context, tabIdx, _) {
-                      return Row(
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           ChoiceChip(
                             label: const Text('Xtream Panels'),
                             selected: tabIdx == 0,
-                            selectedColor: palette.primaryColor.withValues(alpha: 0.25),
+                            selectedColor: palette.primaryColor.withValues(
+                              alpha: 0.25,
+                            ),
                             backgroundColor: const Color(0xFF0D1017),
                             labelStyle: TextStyle(
-                              color: tabIdx == 0 ? palette.primaryColor : Colors.white70,
-                              fontWeight: tabIdx == 0 ? FontWeight.w800 : FontWeight.w500,
+                              color: tabIdx == 0
+                                  ? palette.primaryColor
+                                  : Colors.white70,
+                              fontWeight: tabIdx == 0
+                                  ? FontWeight.w800
+                                  : FontWeight.w500,
                               fontSize: 12,
                             ),
                             side: BorderSide(
@@ -336,15 +381,20 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                               if (selected) IptvSettings.setDefaultPortalTab(0);
                             },
                           ),
-                          const SizedBox(width: 8),
                           ChoiceChip(
                             label: const Text('M3U Playlists'),
                             selected: tabIdx == 1,
-                            selectedColor: palette.primaryColor.withValues(alpha: 0.25),
+                            selectedColor: palette.primaryColor.withValues(
+                              alpha: 0.25,
+                            ),
                             backgroundColor: const Color(0xFF0D1017),
                             labelStyle: TextStyle(
-                              color: tabIdx == 1 ? palette.primaryColor : Colors.white70,
-                              fontWeight: tabIdx == 1 ? FontWeight.w800 : FontWeight.w500,
+                              color: tabIdx == 1
+                                  ? palette.primaryColor
+                                  : Colors.white70,
+                              fontWeight: tabIdx == 1
+                                  ? FontWeight.w800
+                                  : FontWeight.w500,
                               fontSize: 12,
                             ),
                             side: BorderSide(
@@ -376,44 +426,64 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, _) {
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        final screenHeight = MediaQuery.sizeOf(context).height;
+        final isMobile = screenWidth < 520;
+
         return Dialog(
           backgroundColor: const Color(0xFF0C0E15),
+          insetPadding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 10 : 28,
+            vertical: isMobile ? 14 : 28,
+          ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(isMobile ? 18 : 24),
             side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final isMobile = constraints.maxWidth < 480;
+              final isNarrow = constraints.maxWidth < 480 || isMobile;
 
               return ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680, maxHeight: 680),
+                constraints: BoxConstraints(
+                  maxWidth: 680,
+                  maxHeight: isMobile ? screenHeight * 0.94 : 680,
+                ),
                 child: Column(
                   children: [
                     // Header
                     Padding(
-                      padding: EdgeInsets.fromLTRB(isMobile ? 14 : 20, isMobile ? 14 : 18, isMobile ? 10 : 16, 10),
+                      padding: EdgeInsets.fromLTRB(
+                        isNarrow ? 12 : 20,
+                        isNarrow ? 12 : 18,
+                        isNarrow ? 8 : 16,
+                        8,
+                      ),
                       child: Row(
                         children: [
                           Container(
-                            padding: EdgeInsets.all(isMobile ? 6 : 8),
+                            padding: EdgeInsets.all(isNarrow ? 6 : 8),
                             decoration: BoxDecoration(
-                              color: palette.primaryColor.withValues(alpha: 0.18),
+                              color: palette.primaryColor.withValues(
+                                alpha: 0.18,
+                              ),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
                               Icons.settings_input_antenna_rounded,
                               color: palette.primaryColor,
-                              size: isMobile ? 19 : 22,
+                              size: isNarrow ? 18 : 22,
                             ),
                           ),
-                          SizedBox(width: isMobile ? 8 : 12),
+                          SizedBox(width: isNarrow ? 8 : 12),
                           Expanded(
                             child: Text(
-                              'IPTV Portals & Playlists',
+                              isNarrow
+                                  ? 'Portals & Playlists'
+                                  : 'IPTV Portals & Playlists',
                               style: TextStyle(
                                 color: Colors.white,
-                                fontSize: isMobile ? 16 : 19,
+                                fontSize: isNarrow ? 16 : 19,
                                 fontWeight: FontWeight.w900,
                               ),
                               maxLines: 1,
@@ -421,7 +491,11 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.tune_rounded, color: Colors.white70, size: 19),
+                            icon: const Icon(
+                              Icons.tune_rounded,
+                              color: Colors.white70,
+                              size: 19,
+                            ),
                             tooltip: 'Customize Modal Style',
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.all(6),
@@ -430,7 +504,11 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                           ),
                           const SizedBox(width: 4),
                           IconButton(
-                            icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white54,
+                              size: 20,
+                            ),
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.all(6),
                             constraints: const BoxConstraints(),
@@ -447,11 +525,25 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       indicatorWeight: 3,
                       labelColor: Colors.white,
                       unselectedLabelColor: Colors.white54,
-                      labelStyle: TextStyle(fontWeight: FontWeight.w800, fontSize: isMobile ? 12.5 : 14),
-                      unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w500, fontSize: isMobile ? 12.5 : 14),
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: isNarrow ? 12 : 14,
+                      ),
+                      unselectedLabelStyle: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: isNarrow ? 12 : 14,
+                      ),
                       tabs: [
-                        Tab(text: 'Xtream Panels (${_ctrl.verified.length})'),
-                        Tab(text: 'M3U Playlists (${_ctrl.m3uPlaylists.length})'),
+                        Tab(
+                          text: isNarrow
+                              ? 'Xtream (${_ctrl.verified.length})'
+                              : 'Xtream Panels (${_ctrl.verified.length})',
+                        ),
+                        Tab(
+                          text: isNarrow
+                              ? 'M3U (${_ctrl.m3uPlaylists.length})'
+                              : 'M3U Playlists (${_ctrl.m3uPlaylists.length})',
+                        ),
                       ],
                     ),
 
@@ -462,8 +554,8 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       child: TabBarView(
                         controller: _tabController,
                         children: [
-                          _buildPortalsTab(),
-                          _buildM3uTab(),
+                          _buildPortalsTab(isNarrow),
+                          _buildM3uTab(isNarrow),
                         ],
                       ),
                     ),
@@ -477,40 +569,60 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
     );
   }
 
-  Widget _buildPortalsTab() {
+  Widget _buildPortalsTab(bool isMobile) {
     final palette = AppThemeService.currentPalette.value;
     final currentList = _filteredPortals;
-    final allSelected = currentList.isNotEmpty && _selectedPortalKeys.length == currentList.length;
+    final allSelected =
+        currentList.isNotEmpty &&
+        _selectedPortalKeys.length == currentList.length;
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isMobile ? 12 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Action Buttons Bar
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: isMobile ? 6 : 8,
+            runSpacing: isMobile ? 6 : 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: palette.primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 10 : 14,
+                    vertical: isMobile ? 8 : 10,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 icon: _ctrl.isScraping
                     ? const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
-                    : const Icon(Icons.radar_rounded, size: 16, color: Colors.white),
+                    : const Icon(
+                        Icons.radar_rounded,
+                        size: 16,
+                        color: Colors.white,
+                      ),
                 label: Text(
                   _ctrl.isScraping
-                      ? 'Finding ${_ctrl.scrapeSource == CatalogSource.cloudVault ? 'Cloud Vault' : 'Reddit'}…'
-                      : 'Generate Portals',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                      ? 'Finding…'
+                      : (isMobile ? 'Generate' : 'Generate Portals'),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: isMobile ? 12 : 13,
+                  ),
                 ),
                 onPressed: _ctrl.isScraping ? null : _ctrl.scrape,
               ),
@@ -529,11 +641,16 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                 ),
                 color: const Color(0xFF161A26),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9.5),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 9 : 12,
+                    vertical: isMobile ? 7.5 : 9.5,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.15),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -542,22 +659,28 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                         _ctrl.scrapeSource == CatalogSource.cloudVault
                             ? Icons.cloud_done_rounded
                             : Icons.forum_rounded,
-                        size: 15,
+                        size: 14,
                         color: _ctrl.scrapeSource == CatalogSource.cloudVault
                             ? const Color(0xFF00E5FF)
                             : const Color(0xFFFF5722),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
-                        _ctrl.scrapeSource == CatalogSource.cloudVault ? 'Cloud Vault' : 'Reddit',
-                        style: const TextStyle(
+                        _ctrl.scrapeSource == CatalogSource.cloudVault
+                            ? 'Cloud Vault'
+                            : 'Reddit',
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 12.5,
+                          fontSize: isMobile ? 11.5 : 12.5,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.arrow_drop_down_rounded, size: 18, color: Colors.white70),
+                      const SizedBox(width: 2),
+                      const Icon(
+                        Icons.arrow_drop_down_rounded,
+                        size: 18,
+                        color: Colors.white70,
+                      ),
                     ],
                   ),
                 ),
@@ -567,7 +690,11 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.cloud_done_rounded, color: Color(0xFF00E5FF), size: 18),
+                        const Icon(
+                          Icons.cloud_done_rounded,
+                          color: Color(0xFF00E5FF),
+                          size: 18,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -578,25 +705,41 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                                 children: [
                                   const Text(
                                     'Cloud Vault',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 1,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+                                      color: const Color(
+                                        0xFF00E5FF,
+                                      ).withValues(alpha: 0.2),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: const Text(
                                       '9.6k+',
-                                      style: TextStyle(color: Color(0xFF00E5FF), fontSize: 9.5, fontWeight: FontWeight.w800),
+                                      style: TextStyle(
+                                        color: Color(0xFF00E5FF),
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                               const Text(
                                 'High-speed cloud database with live IPTV servers',
-                                style: TextStyle(color: Colors.white60, fontSize: 10.5),
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 10.5,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -611,7 +754,11 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.forum_rounded, color: Color(0xFFFF5722), size: 18),
+                        Icon(
+                          Icons.forum_rounded,
+                          color: Color(0xFFFF5722),
+                          size: 18,
+                        ),
                         SizedBox(width: 10),
                         Expanded(
                           child: Column(
@@ -620,11 +767,18 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                             children: [
                               Text(
                                 'Reddit Communities',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
                               ),
                               Text(
                                 'Scrapes live shared pastes from subreddits',
-                                style: TextStyle(color: Colors.white60, fontSize: 10.5),
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 10.5,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -641,11 +795,24 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 10 : 14,
+                    vertical: isMobile ? 8 : 10,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 icon: const Icon(Icons.add_rounded, size: 16),
-                label: const Text('Add Portal', style: TextStyle(fontWeight: FontWeight.w700)),
+                label: Text(
+                  isMobile ? 'Add' : 'Add Portal',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: isMobile ? 12 : 13,
+                  ),
+                ),
                 onPressed: () => setState(() {
                   _showAddForm = !_showAddForm;
                 }),
@@ -654,15 +821,37 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
               if (_ctrl.verified.isNotEmpty)
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _isPortalsEditMode ? const Color(0xFF00D2EF) : Colors.white,
+                    foregroundColor: _isPortalsEditMode
+                        ? const Color(0xFF00D2EF)
+                        : Colors.white,
                     side: BorderSide(
-                      color: _isPortalsEditMode ? const Color(0xFF00D2EF) : Colors.white.withValues(alpha: 0.2),
+                      color: _isPortalsEditMode
+                          ? const Color(0xFF00D2EF)
+                          : Colors.white.withValues(alpha: 0.2),
                     ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 9 : 12,
+                      vertical: isMobile ? 8 : 10,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  icon: Icon(_isPortalsEditMode ? Icons.edit_off_rounded : Icons.edit_rounded, size: 16),
-                  label: Text(_isPortalsEditMode ? 'Done' : 'Manage', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  icon: Icon(
+                    _isPortalsEditMode
+                        ? Icons.edit_off_rounded
+                        : Icons.edit_rounded,
+                    size: 15,
+                  ),
+                  label: Text(
+                    _isPortalsEditMode ? 'Done' : 'Manage',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: isMobile ? 12 : 13,
+                    ),
+                  ),
                   onPressed: () {
                     setState(() {
                       _isPortalsEditMode = !_isPortalsEditMode;
@@ -681,7 +870,9 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
               decoration: BoxDecoration(
                 color: const Color(0xFF7C5CFF).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF7C5CFF).withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: const Color(0xFF7C5CFF).withValues(alpha: 0.3),
+                ),
               ),
               child: Wrap(
                 spacing: 8,
@@ -695,18 +886,26 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         icon: Icon(
-                          allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+                          allSelected
+                              ? Icons.deselect_rounded
+                              : Icons.select_all_rounded,
                           size: 17,
                           color: const Color(0xFF00D2EF),
                         ),
                         label: Text(
                           allSelected ? 'Deselect All' : 'Select All',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
                         ),
                         onPressed: () {
                           setState(() {
@@ -714,7 +913,9 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                               _selectedPortalKeys.clear();
                             } else {
                               _selectedPortalKeys.clear();
-                              _selectedPortalKeys.addAll(currentList.map((v) => v.key));
+                              _selectedPortalKeys.addAll(
+                                currentList.map((v) => v.key),
+                              );
                             }
                           });
                         },
@@ -741,30 +942,51 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                           backgroundColor: Colors.redAccent,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         icon: const Icon(Icons.delete_rounded, size: 14),
                         label: Text(
                           'Delete (${_selectedPortalKeys.length})',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        onPressed: _selectedPortalKeys.isEmpty ? null : _deleteSelectedPortals,
+                        onPressed: _selectedPortalKeys.isEmpty
+                            ? null
+                            : _deleteSelectedPortals,
                       ),
                       // Delete All
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.redAccent,
                           side: const BorderSide(color: Colors.redAccent),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         onPressed: _deleteAllPortals,
-                        child: const Text('Delete All', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          'Delete All',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -777,7 +999,11 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
             const SizedBox(height: 10),
             Text(
               _ctrl.statusText,
-              style: const TextStyle(color: Color(0xFF00D2EF), fontSize: 12, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: Color(0xFF00D2EF),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
 
@@ -794,8 +1020,13 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Add Xtream Codes Portal',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                  const Text(
+                    'Add Xtream Codes Portal',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _urlCtrl,
@@ -812,7 +1043,10 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       Expanded(
                         child: TextField(
                           controller: _userCtrl,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
                           decoration: const InputDecoration(
                             labelText: 'Username',
                             isDense: true,
@@ -824,7 +1058,10 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       Expanded(
                         child: TextField(
                           controller: _passCtrl,
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                          ),
                           decoration: const InputDecoration(
                             labelText: 'Password',
                             isDense: true,
@@ -836,19 +1073,30 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                   ),
                   if (_ctrl.addError != null) ...[
                     const SizedBox(height: 6),
-                    Text(_ctrl.addError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                    Text(
+                      _ctrl.addError!,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 10),
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C5CFF)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7C5CFF),
+                      ),
                       onPressed: _ctrl.isAdding ? null : _submitAddPortal,
                       child: _ctrl.isAdding
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Text('Verify & Save'),
                     ),
@@ -867,7 +1115,12 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
               physics: const BouncingScrollPhysics(),
               child: Row(
                 children: [
-                  _buildSourceChip('all', 'All (${_ctrl.verified.length})', Icons.apps_rounded, palette),
+                  _buildSourceChip(
+                    'all',
+                    'All (${_ctrl.verified.length})',
+                    Icons.apps_rounded,
+                    palette,
+                  ),
                   const SizedBox(width: 6),
                   _buildSourceChip(
                     'custom',
@@ -932,204 +1185,402 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                   final isFav = _ctrl.isFavoritePortal(p.key);
                   final isSelected = _selectedPortalKeys.contains(p.key);
 
-                      final isRich = IptvSettings.portalCardStyle.value == PortalCardStyle.rich;
-                      final showExp = IptvSettings.showPortalExpiry.value && p.expiry.isNotEmpty;
-                      final showConn = IptvSettings.showPortalConnections.value && p.maxConnections.isNotEmpty;
+                  final isRich =
+                      IptvSettings.portalCardStyle.value ==
+                      PortalCardStyle.rich;
+                  final showExp =
+                      IptvSettings.showPortalExpiry.value &&
+                      p.expiry.isNotEmpty;
+                  final showConn =
+                      IptvSettings.showPortalConnections.value &&
+                      p.maxConnections.isNotEmpty;
 
-                      return MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          onTapDown: (details) => _tapPosition = details.globalPosition,
-                          onTap: () {
-                            if (_isPortalsEditMode) {
-                              setState(() {
-                                if (isSelected) {
-                                  _selectedPortalKeys.remove(p.key);
-                                } else {
-                                  _selectedPortalKeys.add(p.key);
-                                }
-                              });
+                  return MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTapDown: (details) =>
+                          _tapPosition = details.globalPosition,
+                      onTap: () {
+                        if (_isPortalsEditMode) {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedPortalKeys.remove(p.key);
                             } else {
-                              final tapPos = _tapPosition;
-                              Navigator.pop(context);
-                              Navigator.push(
-                                context,
-                                LiquidRevealRoute(
-                                  page: IptvPortalBrowserPage(portal: p),
-                                  tapPosition: tapPos,
-                                ),
-                              );
+                              _selectedPortalKeys.add(p.key);
                             }
-                          },
-                          child: Container(
-                            padding: EdgeInsets.symmetric(horizontal: 14, vertical: isRich ? 12 : 8),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? palette.primaryColor.withValues(alpha: 0.15)
-                                  : Colors.white.withValues(alpha: 0.04),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSelected
-                                    ? palette.primaryColor
-                                    : Colors.white.withValues(alpha: 0.08),
-                                width: isSelected ? 1.5 : 1.0,
-                              ),
+                          });
+                        } else {
+                          final tapPos = _tapPosition;
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            LiquidRevealRoute(
+                              page: IptvPortalBrowserPage(portal: p),
+                              tapPosition: tapPos,
                             ),
-                            child: Row(
-                              children: [
-                                if (_isPortalsEditMode)
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    margin: const EdgeInsets.only(right: 12),
-                                    decoration: BoxDecoration(
-                                      color: isSelected ? palette.primaryColor : Colors.transparent,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: isSelected ? palette.primaryColor : Colors.white38,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: isSelected
-                                        ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
-                                        : null,
-                                  )
-                                else ...[
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.greenAccent,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                ],
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        p.name.isNotEmpty ? p.name : p.portal.url,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 4,
-                                        crossAxisAlignment: WrapCrossAlignment.center,
-                                        children: [
-                                          Text(
-                                            p.portal.url,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 11),
-                                          ),
-                                          if (showExp)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                              decoration: BoxDecoration(
-                                                color: palette.primaryColor.withValues(alpha: 0.15),
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                'Exp: ${p.expiry}',
-                                                style: TextStyle(color: palette.primaryColor, fontSize: 10, fontWeight: FontWeight.w700),
-                                              ),
-                                            ),
-                                          if (showConn)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white.withValues(alpha: 0.08),
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                'Conn: ${p.activeConnections}/${p.maxConnections}',
-                                                style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w600),
-                                              ),
-                                            ),
-                                          if (p.portal.source.isNotEmpty)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                              decoration: BoxDecoration(
-                                                color: p.portal.source.toLowerCase().contains('cloud') || p.portal.source.toLowerCase().contains('vault')
-                                                    ? const Color(0xFF00E5FF).withValues(alpha: 0.15)
-                                                    : (p.portal.source.toLowerCase().contains('reddit')
-                                                        ? const Color(0xFFFF5722).withValues(alpha: 0.15)
-                                                        : Colors.white.withValues(alpha: 0.08)),
-                                                borderRadius: BorderRadius.circular(4),
-                                              ),
-                                              child: Text(
-                                                p.portal.source,
-                                                style: TextStyle(
-                                                  color: p.portal.source.toLowerCase().contains('cloud') || p.portal.source.toLowerCase().contains('vault')
-                                                      ? const Color(0xFF00E5FF)
-                                                      : (p.portal.source.toLowerCase().contains('reddit')
-                                                          ? const Color(0xFFFF7043)
-                                                          : Colors.white70),
-                                                  fontSize: 9.5,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.copy_rounded, color: Colors.white54, size: 18),
-                                  tooltip: 'Copy Login (url:username:password)',
-                                  onPressed: () {
-                                    final text = '${p.portal.url}:${p.portal.username}:${p.portal.password}';
-                                    Clipboard.setData(ClipboardData(text: text));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Copied: $text'),
-                                        duration: const Duration(seconds: 2),
-                                        backgroundColor: const Color(0xFF1E2235),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    isFav ? Icons.star_rounded : Icons.star_outline_rounded,
-                                    color: isFav ? const Color(0xFFFFC107) : Colors.white38,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => _ctrl.toggleFavoritePortal(p.key),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                  onPressed: () => _ctrl.deletePortalsByKeys({p.key}),
-                                ),
-                                const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 20),
-                              ],
-                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 12 : 14,
+                          vertical: isMobile ? 10 : (isRich ? 12 : 8),
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? palette.primaryColor.withValues(alpha: 0.15)
+                              : Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? palette.primaryColor
+                                : Colors.white.withValues(alpha: 0.08),
+                            width: isSelected ? 1.5 : 1.0,
                           ),
                         ),
-                      );
-                    },
+                        child: _buildPortalCardContent(
+                          context: context,
+                          p: p,
+                          isSelected: isSelected,
+                          isFav: isFav,
+                          isRich: isRich,
+                          showExp: showExp,
+                          showConn: showConn,
+                          isMobile: isMobile,
+                          palette: palette,
+                        ),
+                      ),
+                    ),
                   );
-                }(),
+                },
+              );
+            }(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSourceChip(String filterKey, String label, IconData icon, AppThemePalette palette, {Color? activeColor}) {
+  Widget _buildPortalCardContent({
+    required BuildContext context,
+    required VerifiedPortal p,
+    required bool isSelected,
+    required bool isFav,
+    required bool isRich,
+    required bool showExp,
+    required bool showConn,
+    required bool isMobile,
+    required AppThemePalette palette,
+  }) {
+    final hasBadges = showExp || showConn || p.portal.source.isNotEmpty;
+
+    // Action button helpers
+    Widget buildCopyBtn() {
+      return IconButton(
+        icon: const Icon(Icons.copy_rounded, color: Colors.white60, size: 17),
+        tooltip: 'Copy Login (url:user:pass)',
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.all(5),
+        constraints: const BoxConstraints(),
+        onPressed: () {
+          final text =
+              '${p.portal.url}:${p.portal.username}:${p.portal.password}';
+          Clipboard.setData(ClipboardData(text: text));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Copied: $text'),
+              duration: const Duration(seconds: 2),
+              backgroundColor: const Color(0xFF1E2235),
+            ),
+          );
+        },
+      );
+    }
+
+    Widget buildFavBtn() {
+      return IconButton(
+        icon: Icon(
+          isFav ? Icons.star_rounded : Icons.star_outline_rounded,
+          color: isFav ? const Color(0xFFFFC107) : Colors.white38,
+          size: 19,
+        ),
+        tooltip: isFav ? 'Remove Favorite' : 'Add to Favorites',
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.all(5),
+        constraints: const BoxConstraints(),
+        onPressed: () => _ctrl.toggleFavoritePortal(p.key),
+      );
+    }
+
+    Widget buildDeleteBtn() {
+      return IconButton(
+        icon: const Icon(
+          Icons.delete_outline_rounded,
+          color: Colors.redAccent,
+          size: 18,
+        ),
+        tooltip: 'Remove Portal',
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.all(5),
+        constraints: const BoxConstraints(),
+        onPressed: () => _ctrl.deletePortalsByKeys({p.key}),
+      );
+    }
+
+    Widget buildLeadingIndicator() {
+      if (_isPortalsEditMode) {
+        return Container(
+          width: 22,
+          height: 22,
+          margin: const EdgeInsets.only(right: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? palette.primaryColor : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isSelected ? palette.primaryColor : Colors.white38,
+              width: 2,
+            ),
+          ),
+          child: isSelected
+              ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
+              : null,
+        );
+      }
+      return Container(
+        width: 8,
+        height: 8,
+        margin: const EdgeInsets.only(right: 10),
+        decoration: const BoxDecoration(
+          color: Colors.greenAccent,
+          shape: BoxShape.circle,
+        ),
+      );
+    }
+
+    Widget buildBadgesWrap() {
+      return Wrap(
+        spacing: 5,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (showExp)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: palette.primaryColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'Exp: ${p.expiry}',
+                style: TextStyle(
+                  color: palette.primaryColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          if (showConn)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'Conn: ${p.activeConnections}/${p.maxConnections}',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          if (p.portal.source.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              decoration: BoxDecoration(
+                color:
+                    p.portal.source.toLowerCase().contains('cloud') ||
+                        p.portal.source.toLowerCase().contains('vault')
+                    ? const Color(0xFF00E5FF).withValues(alpha: 0.15)
+                    : (p.portal.source.toLowerCase().contains('reddit')
+                          ? const Color(0xFFFF5722).withValues(alpha: 0.15)
+                          : Colors.white.withValues(alpha: 0.08)),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                p.portal.source,
+                style: TextStyle(
+                  color:
+                      p.portal.source.toLowerCase().contains('cloud') ||
+                          p.portal.source.toLowerCase().contains('vault')
+                      ? const Color(0xFF00E5FF)
+                      : (p.portal.source.toLowerCase().contains('reddit')
+                            ? const Color(0xFFFF7043)
+                            : Colors.white70),
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    if (isMobile) {
+      // ── Mobile Responsive Card ──
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Top Row: Status/Checkbox + Portal Name + Quick Action Buttons
+          Row(
+            children: [
+              buildLeadingIndicator(),
+              Expanded(
+                child: Text(
+                  p.name.isNotEmpty ? p.name : p.portal.url,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              buildCopyBtn(),
+              const SizedBox(width: 2),
+              buildFavBtn(),
+              if (!_isPortalsEditMode) ...[
+                const SizedBox(width: 2),
+                buildDeleteBtn(),
+              ],
+            ],
+          ),
+
+          const SizedBox(height: 4),
+
+          // URL Row: Spans the full card width, strictly horizontal with ellipsis
+          Row(
+            children: [
+              const Icon(Icons.link_rounded, size: 13, color: Colors.white38),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  p.portal.url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              if (!hasBadges) ...[
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white30,
+                  size: 17,
+                ),
+              ],
+            ],
+          ),
+
+          // Badges & Navigation Row
+          if (hasBadges) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(child: buildBadgesWrap()),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white30,
+                  size: 17,
+                ),
+              ],
+            ),
+          ],
+        ],
+      );
+    } else {
+      // ── Desktop / Tablet Card ──
+      return Row(
+        children: [
+          buildLeadingIndicator(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  p.name.isNotEmpty ? p.name : p.portal.url,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  p.portal.url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.45),
+                    fontSize: 11,
+                  ),
+                ),
+                if (hasBadges && isRich) ...[
+                  const SizedBox(height: 4),
+                  buildBadgesWrap(),
+                ],
+              ],
+            ),
+          ),
+          if (hasBadges && !isRich) ...[
+            const SizedBox(width: 8),
+            buildBadgesWrap(),
+          ],
+          const SizedBox(width: 6),
+          buildCopyBtn(),
+          const SizedBox(width: 2),
+          buildFavBtn(),
+          if (!_isPortalsEditMode) ...[
+            const SizedBox(width: 2),
+            buildDeleteBtn(),
+          ],
+          const SizedBox(width: 2),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: Colors.white38,
+            size: 18,
+          ),
+        ],
+      );
+    }
+  }
+
+  Widget _buildSourceChip(
+    String filterKey,
+    String label,
+    IconData icon,
+    AppThemePalette palette, {
+    Color? activeColor,
+  }) {
     final isSelected = _portalSourceFilter == filterKey;
     final color = activeColor ?? palette.primaryColor;
 
     return ChoiceChip(
-      avatar: Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.white60),
+      avatar: Icon(
+        icon,
+        size: 14,
+        color: isSelected ? Colors.white : Colors.white60,
+      ),
       label: Text(label),
       selected: isSelected,
       selectedColor: color.withValues(alpha: 0.3),
@@ -1154,12 +1605,14 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
     );
   }
 
-  Widget _buildM3uTab() {
+  Widget _buildM3uTab(bool isMobile) {
     final palette = AppThemeService.currentPalette.value;
-    final allSelected = _ctrl.m3uPlaylists.isNotEmpty && _selectedM3uIds.length == _ctrl.m3uPlaylists.length;
+    final allSelected =
+        _ctrl.m3uPlaylists.isNotEmpty &&
+        _selectedM3uIds.length == _ctrl.m3uPlaylists.length;
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isMobile ? 12 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1168,11 +1621,29 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: palette.primaryColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 10 : 14,
+                    vertical: isMobile ? 8 : 10,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                icon: const Icon(Icons.playlist_add_rounded, size: 18, color: Colors.white),
-                label: const Text('Add M3U URL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                icon: const Icon(
+                  Icons.playlist_add_rounded,
+                  size: 17,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  isMobile ? 'Add M3U' : 'Add M3U URL',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: isMobile ? 12 : 13,
+                  ),
+                ),
                 onPressed: () => setState(() => _showM3uForm = !_showM3uForm),
               ),
 
@@ -1180,15 +1651,37 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _isM3uEditMode ? const Color(0xFF00D2EF) : Colors.white,
+                    foregroundColor: _isM3uEditMode
+                        ? const Color(0xFF00D2EF)
+                        : Colors.white,
                     side: BorderSide(
-                      color: _isM3uEditMode ? const Color(0xFF00D2EF) : Colors.white.withValues(alpha: 0.2),
+                      color: _isM3uEditMode
+                          ? const Color(0xFF00D2EF)
+                          : Colors.white.withValues(alpha: 0.2),
                     ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 10 : 12,
+                      vertical: isMobile ? 8 : 10,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  icon: Icon(_isM3uEditMode ? Icons.edit_off_rounded : Icons.edit_rounded, size: 16),
-                  label: Text(_isM3uEditMode ? 'Done' : 'Manage', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  icon: Icon(
+                    _isM3uEditMode
+                        ? Icons.edit_off_rounded
+                        : Icons.edit_rounded,
+                    size: 15,
+                  ),
+                  label: Text(
+                    _isM3uEditMode ? 'Done' : 'Manage',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: isMobile ? 12 : 13,
+                    ),
+                  ),
                   onPressed: () {
                     setState(() {
                       _isM3uEditMode = !_isM3uEditMode;
@@ -1208,7 +1701,9 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
               decoration: BoxDecoration(
                 color: palette.primaryColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: palette.primaryColor.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: palette.primaryColor.withValues(alpha: 0.3),
+                ),
               ),
               child: Wrap(
                 spacing: 8,
@@ -1222,18 +1717,26 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         icon: Icon(
-                          allSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
+                          allSelected
+                              ? Icons.deselect_rounded
+                              : Icons.select_all_rounded,
                           size: 17,
                           color: const Color(0xFF00D2EF),
                         ),
                         label: Text(
                           allSelected ? 'Deselect All' : 'Select All',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                          ),
                         ),
                         onPressed: () {
                           setState(() {
@@ -1241,7 +1744,9 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                               _selectedM3uIds.clear();
                             } else {
                               _selectedM3uIds.clear();
-                              _selectedM3uIds.addAll(_ctrl.m3uPlaylists.map((pl) => pl.id));
+                              _selectedM3uIds.addAll(
+                                _ctrl.m3uPlaylists.map((pl) => pl.id),
+                              );
                             }
                           });
                         },
@@ -1268,30 +1773,51 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                           backgroundColor: Colors.redAccent,
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         icon: const Icon(Icons.delete_rounded, size: 14),
                         label: Text(
                           'Delete (${_selectedM3uIds.length})',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        onPressed: _selectedM3uIds.isEmpty ? null : _deleteSelectedM3u,
+                        onPressed: _selectedM3uIds.isEmpty
+                            ? null
+                            : _deleteSelectedM3u,
                       ),
                       // Delete All
                       OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.redAccent,
                           side: const BorderSide(color: Colors.redAccent),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         onPressed: _deleteAllM3u,
-                        child: const Text('Delete All', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        child: const Text(
+                          'Delete All',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1312,8 +1838,13 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Add M3U Playlist Subscription',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                  const Text(
+                    'Add M3U Playlist Subscription',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _m3uNameCtrl,
@@ -1338,13 +1869,18 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                   Align(
                     alignment: Alignment.centerRight,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7C5CFF)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF7C5CFF),
+                      ),
                       onPressed: _ctrl.isM3uLoading ? null : _submitAddM3u,
                       child: _ctrl.isM3uLoading
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : const Text('Fetch & Save'),
                     ),
@@ -1354,12 +1890,15 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
             ),
           ],
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           Expanded(
             child: _ctrl.m3uPlaylists.isEmpty
                 ? const Center(
-                    child: Text('No M3U playlists saved.', style: TextStyle(color: Colors.white54)),
+                    child: Text(
+                      'No M3U playlists saved.',
+                      style: TextStyle(color: Colors.white54),
+                    ),
                   )
                 : ListView.separated(
                     itemCount: _ctrl.m3uPlaylists.length,
@@ -1371,7 +1910,8 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                       return MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
-                          onTapDown: (details) => _tapPosition = details.globalPosition,
+                          onTapDown: (details) =>
+                              _tapPosition = details.globalPosition,
                           onTap: () {
                             if (_isM3uEditMode) {
                               setState(() {
@@ -1394,7 +1934,10 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 12 : 14,
+                              vertical: isMobile ? 10 : 10,
+                            ),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? palette.primaryColor.withValues(alpha: 0.15)
@@ -1407,69 +1950,12 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
                                 width: isSelected ? 1.5 : 1.0,
                               ),
                             ),
-                            child: Row(
-                              children: [
-                                if (_isM3uEditMode)
-                                  Container(
-                                    width: 24,
-                                    height: 24,
-                                    margin: const EdgeInsets.only(right: 12),
-                                    decoration: BoxDecoration(
-                                      color: isSelected ? palette.primaryColor : Colors.transparent,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: isSelected ? palette.primaryColor : Colors.white38,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: isSelected
-                                        ? const Icon(Icons.check_rounded, color: Colors.white, size: 15)
-                                        : null,
-                                  )
-                                else ...[
-                                  Icon(Icons.queue_music_rounded, color: palette.primaryColor, size: 20),
-                                  const SizedBox(width: 12),
-                                ],
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        pl.name,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13.5),
-                                      ),
-                                      Text(
-                                        '${pl.channels.length} channels ${pl.sourceUrl != null ? '· ${pl.sourceUrl!}' : ''}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.copy_rounded, color: Colors.white54, size: 18),
-                                  tooltip: 'Copy Playlist URL',
-                                  onPressed: () {
-                                    final text = pl.sourceUrl ?? '';
-                                    if (text.isNotEmpty) {
-                                      Clipboard.setData(ClipboardData(text: text));
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Copied: $text'),
-                                          duration: const Duration(seconds: 2),
-                                          backgroundColor: const Color(0xFF1E2235),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                  onPressed: () => _ctrl.deleteM3uPlaylist(pl.id),
-                                ),
-                                const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 20),
-                              ],
+                            child: _buildM3uCardContent(
+                              context: context,
+                              pl: pl,
+                              isSelected: isSelected,
+                              isMobile: isMobile,
+                              palette: palette,
                             ),
                           ),
                         ),
@@ -1480,5 +1966,203 @@ class _IptvPortalsModalState extends State<IptvPortalsModal>
         ],
       ),
     );
+  }
+
+  Widget _buildM3uCardContent({
+    required BuildContext context,
+    required M3uPlaylist pl,
+    required bool isSelected,
+    required bool isMobile,
+    required AppThemePalette palette,
+  }) {
+    Widget buildM3uCopyBtn() {
+      return IconButton(
+        icon: const Icon(Icons.copy_rounded, color: Colors.white60, size: 17),
+        tooltip: 'Copy Playlist URL',
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.all(5),
+        constraints: const BoxConstraints(),
+        onPressed: () {
+          final text = pl.sourceUrl ?? '';
+          if (text.isNotEmpty) {
+            Clipboard.setData(ClipboardData(text: text));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Copied: $text'),
+                duration: const Duration(seconds: 2),
+                backgroundColor: const Color(0xFF1E2235),
+              ),
+            );
+          }
+        },
+      );
+    }
+
+    Widget buildM3uDeleteBtn() {
+      return IconButton(
+        icon: const Icon(
+          Icons.delete_outline_rounded,
+          color: Colors.redAccent,
+          size: 18,
+        ),
+        tooltip: 'Remove Playlist',
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.all(5),
+        constraints: const BoxConstraints(),
+        onPressed: () => _ctrl.deleteM3uPlaylist(pl.id),
+      );
+    }
+
+    Widget buildM3uLeading() {
+      if (_isM3uEditMode) {
+        return Container(
+          width: 22,
+          height: 22,
+          margin: const EdgeInsets.only(right: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? palette.primaryColor : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isSelected ? palette.primaryColor : Colors.white38,
+              width: 2,
+            ),
+          ),
+          child: isSelected
+              ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
+              : null,
+        );
+      }
+      return Container(
+        margin: const EdgeInsets.only(right: 10),
+        child: Icon(
+          Icons.queue_music_rounded,
+          color: palette.primaryColor,
+          size: 19,
+        ),
+      );
+    }
+
+    if (isMobile) {
+      // ── Mobile M3U Card ──
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              buildM3uLeading(),
+              Expanded(
+                child: Text(
+                  pl.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              buildM3uCopyBtn(),
+              if (!_isM3uEditMode) ...[
+                const SizedBox(width: 2),
+                buildM3uDeleteBtn(),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 1.5,
+                ),
+                decoration: BoxDecoration(
+                  color: palette.primaryColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${pl.channels.length} ch',
+                  style: TextStyle(
+                    color: palette.primaryColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (pl.sourceUrl != null && pl.sourceUrl!.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    pl.sourceUrl!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ] else
+                const Spacer(),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white30,
+                size: 17,
+              ),
+            ],
+          ),
+        ],
+      );
+    } else {
+      // ── Desktop M3U Card ──
+      return Row(
+        children: [
+          buildM3uLeading(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  pl.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${pl.channels.length} channels ${pl.sourceUrl != null ? '· ${pl.sourceUrl!}' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          buildM3uCopyBtn(),
+          if (!_isM3uEditMode) ...[
+            const SizedBox(width: 2),
+            buildM3uDeleteBtn(),
+          ],
+          const SizedBox(width: 2),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: Colors.white38,
+            size: 18,
+          ),
+        ],
+      );
+    }
   }
 }
