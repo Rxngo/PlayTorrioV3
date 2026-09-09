@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -879,8 +880,8 @@ class _HeroCarouselState extends State<_HeroCarousel> {
       return (screenHeight * 0.70).clamp(520.0, 740.0);
     } else {
       // Maximized / Widescreen Desktop: generous height
-      final targetHeight = screenHeight * 0.85;
-      return targetHeight.clamp(680.0, 920.0);
+      final targetHeight = screenHeight * 0.82;
+      return targetHeight.clamp(620.0, 1050.0);
     }
   }
 
@@ -1091,7 +1092,10 @@ class _HeroSlide extends StatelessWidget {
     final palette = AppThemeService.currentPalette.value;
     final heroStyle = HomePageSettings.heroStyle.value;
 
-    final imageUrl = detail?.background ?? movie.poster;
+    final hasBackdrop = detail?.background != null && detail!.background!.trim().isNotEmpty;
+    final backdropUrl = hasBackdrop ? detail!.background! : null;
+    final posterUrl = movie.poster;
+    final imageUrl = backdropUrl ?? posterUrl;
     final year = detail?.year ?? movie.year;
     final rating = detail?.imdbRating;
     final description = detail?.description;
@@ -1101,17 +1105,153 @@ class _HeroSlide extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // ── Background ──
-        if (imageUrl != null)
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            alignment: const Alignment(0, -0.15),
-            filterQuality: FilterQuality.medium,
-            fadeInDuration: const Duration(milliseconds: 300),
-            placeholder: (_, __) => const ColoredBox(color: Color(0xFF151822)),
-            errorWidget: (_, __, ___) =>
-                const ColoredBox(color: Color(0xFF151822)),
+        // ── Background Layers ──
+        if (imageUrl != null && imageUrl.trim().isNotEmpty)
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final containerWidth = constraints.maxWidth;
+                final containerHeight = constraints.maxHeight;
+                final containerAspect = containerWidth / containerHeight;
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Layer 1: Ambient blurred background fill (eliminates all black bars)
+                    ClipRect(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ImageFiltered(
+                            imageFilter: ImageFilter.blur(
+                              sigmaX: 32,
+                              sigmaY: 32,
+                            ),
+                            child: Transform.scale(
+                              scale: 1.15,
+                              child: CachedNetworkImage(
+                                imageUrl: imageUrl,
+                                fit: BoxFit.cover,
+                                alignment: Alignment.center,
+                                filterQuality: FilterQuality.low,
+                                fadeInDuration:
+                                    const Duration(milliseconds: 300),
+                                placeholder: (_, __) => const ColoredBox(
+                                    color: Color(0xFF151822)),
+                                errorWidget: (_, __, ___) => const ColoredBox(
+                                    color: Color(0xFF151822)),
+                              ),
+                            ),
+                          ),
+                          ColoredBox(
+                            color: palette.scaffoldBackgroundColor
+                                .withValues(alpha: 0.50),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Layer 2: Crisp foreground artwork
+                    if (hasBackdrop) ...[
+                      // Landscape 16:9 backdrop available
+                      if (containerAspect <= 1.78)
+                        Positioned.fill(
+                          child: CachedNetworkImage(
+                            imageUrl: backdropUrl!,
+                            fit: BoxFit.cover,
+                            alignment: const Alignment(0, -0.15),
+                            filterQuality: FilterQuality.medium,
+                            fadeInDuration: const Duration(milliseconds: 300),
+                            placeholder: (_, __) => const SizedBox.shrink(),
+                            errorWidget: (_, __, ___) =>
+                                const SizedBox.shrink(),
+                          ),
+                        )
+                      else
+                        Positioned(
+                          top: 0,
+                          bottom: 0,
+                          right: 0,
+                          width: (containerHeight * (16 / 9))
+                              .clamp(0.0, containerWidth),
+                          child: ShaderMask(
+                            shaderCallback: (bounds) {
+                              return const LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                stops: [0.0, 0.22],
+                                colors: [Colors.transparent, Colors.white],
+                              ).createShader(bounds);
+                            },
+                            blendMode: BlendMode.dstIn,
+                            child: CachedNetworkImage(
+                              imageUrl: backdropUrl!,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.topCenter,
+                              filterQuality: FilterQuality.high,
+                              fadeInDuration: const Duration(milliseconds: 300),
+                              placeholder: (_, __) => const SizedBox.shrink(),
+                              errorWidget: (_, __, ___) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                    ] else ...[
+                      // Portrait poster fallback (when no 16:9 backdrop is available)
+                      if (containerAspect <= 1.2)
+                        Positioned.fill(
+                          child: CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.topCenter,
+                            filterQuality: FilterQuality.medium,
+                            fadeInDuration: const Duration(milliseconds: 300),
+                            placeholder: (_, __) => const SizedBox.shrink(),
+                            errorWidget: (_, __, ___) =>
+                                const SizedBox.shrink(),
+                          ),
+                        )
+                      else
+                        Positioned(
+                          top: 40,
+                          bottom: isCompact ? 70 : 60,
+                          right: isCompact ? 24 : 72,
+                          child: AspectRatio(
+                            aspectRatio: 2 / 3,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    blurRadius: 36,
+                                    spreadRadius: 4,
+                                    offset: const Offset(0, 14),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  fit: BoxFit.cover,
+                                  filterQuality: FilterQuality.high,
+                                  fadeInDuration:
+                                      const Duration(milliseconds: 300),
+                                  placeholder: (_, __) =>
+                                      const SizedBox.shrink(),
+                                  errorWidget: (_, __, ___) =>
+                                      const SizedBox.shrink(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
+                );
+              },
+            ),
           )
         else
           const ColoredBox(color: Color(0xFF151822)),
