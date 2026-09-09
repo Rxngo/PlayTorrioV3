@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/theme/app_theme_service.dart';
 import '../../models/iptv/iptv_models.dart';
+import '../../models/iptv/m3u_models.dart';
 import '../../services/iptv/iptv_controller.dart';
 import '../../services/iptv/iptv_network.dart';
 import '../../services/iptv/iptv_settings.dart';

@@ -115,6 +115,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _showAudioHud = false;
   String _audioHudText = '';
   Timer? _audioHudTimer;
+  bool _showAspectHud = false;
+  String _aspectHudText = '';
+  Timer? _aspectHudTimer;
 
   // Subtitle State
   List<SubtitleLanguageGroup> _subtitleGroups = [];
@@ -143,10 +146,13 @@ class _PlayerScreenState extends State<PlayerScreen>
   Video? _sourcesEpisode;
   String? _sourcesErrorMessage;
   final Map<String, List<StreamSource>> _cachedSourcesByEpisode = {};
+  String? _activeStreamUrl;
+  bool _wasFullscreenBeforeEntering = false;
 
   @override
   void initState() {
     super.initState();
+    _wasFullscreenBeforeEntering = WindowService.instance.isFullscreen;
     _currentSource = widget.source;
     _currentEpisode = widget.episode;
     _currentTitle = widget.title;
@@ -237,6 +243,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       // Handle offline downloaded file playback directly
       if (rawUrl != null && (File(rawUrl).existsSync() || _currentSource.name == 'Downloaded')) {
         print('[PlayerScreen] Initializing offline local file playback: $rawUrl');
+        _activeStreamUrl = rawUrl;
         await PlayerSettings.applyPreOpenProperties(_player);
         await _player.open(Media(rawUrl), play: true);
         await PlayerSettings.applyPostOpenProperties(_player);
@@ -328,6 +335,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       }
 
       final cleanUri = Uri.parse(sanitizedUrlStr);
+      _activeStreamUrl = sanitizedUrlStr;
       print('[PlayerScreen] Opening direct network stream URL: $cleanUri (headers: ${playerHeaders.keys})');
 
       if (!mounted) return;
@@ -983,6 +991,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _skipSegments = [];
       _subtitleGroups = [];
       _currentSubtitlePath = null;
+      _activeStreamUrl = null;
       _currentCues = [];
       _currentSubtitleVariant = prevVariant;
       _isSubtitleEnabled = wasSubEnabled;
@@ -1142,6 +1151,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     _progressSaveTimer?.cancel();
     _volumeHudTimer?.cancel();
     _audioHudTimer?.cancel();
+    _aspectHudTimer?.cancel();
     _savePlaybackProgress();
     WakelockPlus.disable();
     _hideTimer?.cancel();
@@ -1157,7 +1167,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     _player.dispose();
     _logoAnimController.dispose();
     TorrentStreamService().cleanup();
-    WindowService.instance.exitFullscreen();
+    if (!_wasFullscreenBeforeEntering && WindowService.instance.isFullscreen) {
+      WindowService.instance.exitFullscreen();
+    }
     DiscordRpcService.instance.clearToIdle();
     super.dispose();
   }
@@ -1185,7 +1197,9 @@ class _PlayerScreenState extends State<PlayerScreen>
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, _) {
-        WindowService.instance.exitFullscreen();
+        if (!_wasFullscreenBeforeEntering && WindowService.instance.isFullscreen) {
+          WindowService.instance.exitFullscreen();
+        }
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -1228,9 +1242,18 @@ class _PlayerScreenState extends State<PlayerScreen>
                   event.logicalKey == LogicalKeyboardKey.keyL) {
                 _seekRelative(const Duration(seconds: 10));
                 return KeyEventResult.handled;
-              } else if (event.logicalKey == LogicalKeyboardKey.keyF) {
+              } else if (event.logicalKey == LogicalKeyboardKey.keyF ||
+                  event.logicalKey == LogicalKeyboardKey.f11) {
                 WindowService.instance.toggleFullscreen();
                 return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.keyC) {
+                _cycleVideoFit();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+                if (WindowService.instance.isFullscreen) {
+                  WindowService.instance.exitFullscreen();
+                  return KeyEventResult.handled;
+                }
               }
             }
             return KeyEventResult.ignored;
@@ -1395,6 +1418,43 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
+  void _handleCopyStreamUrl() {
+    final url = _activeStreamUrl ?? _currentSource.url;
+    if (url != null && url.isNotEmpty) {
+      Clipboard.setData(ClipboardData(text: url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.link_rounded, color: Colors.greenAccent, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'Stream URL copied to clipboard',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF1E2028),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
+            margin: const EdgeInsets.only(bottom: 24, left: 24, right: 24),
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No active stream URL available to copy.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildControlsOverlay() {
     final buffered = _buffered;
 
@@ -1459,12 +1519,15 @@ class _PlayerScreenState extends State<PlayerScreen>
                       quality: _currentSource.name,
                       onDownload: (_isLoading || isOfflineFile) ? null : _handleDownloadMedia,
                       isDownloading: isDownloading,
+                      onCopyStreamUrl: _isLoading ? null : _handleCopyStreamUrl,
                       onToggleEpisodes: (!_isLoading && widget.detail?.videos.isNotEmpty == true)
                           ? _toggleEpisodesPanel
                           : null,
                       isEpisodesActive: _showEpisodesPanel || _showSourcesPanel,
                       onBack: () {
-                        WindowService.instance.exitFullscreen();
+                        if (!_wasFullscreenBeforeEntering && WindowService.instance.isFullscreen) {
+                          WindowService.instance.exitFullscreen();
+                        }
                         Navigator.pop(context);
                       },
                     );
@@ -1850,6 +1913,14 @@ class _PlayerScreenState extends State<PlayerScreen>
                 child: _buildAudioHud(),
               ),
             ),
+
+          // Center Heads-Up Aspect Ratio / Crop Display (HUD)
+          if (_showAspectHud)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: _buildAspectHud(),
+              ),
+            ),
         ],
       );
   }
@@ -2021,6 +2092,75 @@ class _PlayerScreenState extends State<PlayerScreen>
             const SizedBox(width: 10),
             Text(
               _audioHudText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _cycleVideoFit() {
+    setState(() {
+      if (_videoFit == BoxFit.contain) {
+        _videoFit = BoxFit.cover;
+        _showAspectHudToast('ASPECT: FILL / CROP (ZOOM)');
+      } else if (_videoFit == BoxFit.cover) {
+        _videoFit = BoxFit.fill;
+        _showAspectHudToast('ASPECT: STRETCH TO FILL');
+      } else {
+        _videoFit = BoxFit.contain;
+        _showAspectHudToast('ASPECT: FIT TO SCREEN');
+      }
+    });
+  }
+
+  void _showAspectHudToast(String text) {
+    _aspectHudTimer?.cancel();
+    setState(() {
+      _aspectHudText = text;
+      _showAspectHud = true;
+    });
+    _aspectHudTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _showAspectHud = false);
+    });
+  }
+
+  Widget _buildAspectHud() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F1117).withValues(alpha: 0.90),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFFFB300).withValues(alpha: 0.5),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFB300).withValues(alpha: 0.25),
+              blurRadius: 24,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.aspect_ratio_rounded,
+              color: Color(0xFFFFB300),
+              size: 24,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              _aspectHudText,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14.5,

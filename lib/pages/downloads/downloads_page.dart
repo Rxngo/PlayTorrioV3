@@ -363,10 +363,16 @@ class _DownloadsPageState extends State<DownloadsPage> with SingleTickerProvider
                       tooltip: 'Pause',
                       onPressed: () => DownloadService.instance.pauseDownload(task.id),
                     )
-                  else if (isPaused || isFailed)
+                  else if (isPaused)
                     IconButton(
                       icon: Icon(Icons.play_circle_fill_rounded, color: palette.primaryColor, size: 26),
                       tooltip: 'Resume',
+                      onPressed: () => DownloadService.instance.resumeDownload(task.id),
+                    )
+                  else if (isFailed)
+                    IconButton(
+                      icon: const Icon(Icons.replay_rounded, color: Colors.orangeAccent, size: 26),
+                      tooltip: 'Retry / Reconnect',
                       onPressed: () => DownloadService.instance.resumeDownload(task.id),
                     ),
                   IconButton(

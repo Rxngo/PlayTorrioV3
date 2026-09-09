@@ -14,6 +14,7 @@ class PlayerTopBar extends StatelessWidget {
   final VoidCallback? onCast;
   final VoidCallback? onDownload;
   final bool isDownloading;
+  final VoidCallback? onCopyStreamUrl;
 
   const PlayerTopBar({
     super.key,
@@ -28,6 +29,7 @@ class PlayerTopBar extends StatelessWidget {
     this.onCast,
     this.onDownload,
     this.isDownloading = false,
+    this.onCopyStreamUrl,
   });
 
   @override
@@ -198,6 +200,17 @@ class PlayerTopBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
+              ],
+              if (onCopyStreamUrl != null) ...[
+                PlayerIconButton(
+                  size: 40,
+                  iconSize: 20,
+                  icon: const Icon(Icons.link_rounded),
+                  tooltip: 'Copy Stream URL',
+                  backgroundColor: const Color(0x22080C12),
+                  onPressed: onCopyStreamUrl,
+                ),
+                const SizedBox(width: 8),
               ],
               if (onScreenshot != null) ...[
                 PlayerIconButton(

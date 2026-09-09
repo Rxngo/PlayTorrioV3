@@ -93,9 +93,12 @@ class _IptvPlayerPageState extends State<IptvPlayerPage>
     return widget.hits.first.stream.streamId != widget.hits.last.stream.streamId;
   }
 
+  bool _wasFullscreenBeforeEntering = false;
+
   @override
   void initState() {
     super.initState();
+    _wasFullscreenBeforeEntering = WindowService.instance.isFullscreen;
     WakelockPlus.enable();
     _activeHitIndex = widget.initialHitIndex.clamp(0, widget.hits.length - 1);
     _sourcesScrollController = ScrollController();
@@ -148,7 +151,9 @@ class _IptvPlayerPageState extends State<IptvPlayerPage>
     _positionNotifier.dispose();
     _bufferedNotifier.dispose();
     _player.dispose();
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    if (!_wasFullscreenBeforeEntering &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS) &&
+        WindowService.instance.isFullscreen) {
       WindowService.instance.exitFullscreen();
     }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -433,14 +438,15 @@ class _IptvPlayerPageState extends State<IptvPlayerPage>
           } else if (event.logicalKey == LogicalKeyboardKey.keyM) {
             _toggleMute();
             return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.keyF) {
-            _cycleVideoFit();
-            _startHideControlsTimer();
-            return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.f11) {
+          } else if (event.logicalKey == LogicalKeyboardKey.keyF ||
+              event.logicalKey == LogicalKeyboardKey.f11) {
             if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
               WindowService.instance.toggleFullscreen();
             }
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.keyC) {
+            _cycleVideoFit();
+            _startHideControlsTimer();
             return KeyEventResult.handled;
           } else if (event.logicalKey == LogicalKeyboardKey.escape) {
             if ((Platform.isWindows || Platform.isLinux || Platform.isMacOS) &&

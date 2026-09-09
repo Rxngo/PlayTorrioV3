@@ -19,6 +19,7 @@ import 'trakt_settings_page.dart';
 import 'simkl_settings_page.dart';
 import 'updates_settings_page.dart';
 import 'about_settings_page.dart';
+import 'support_dev_settings_page.dart';
 import '../../services/player/player_settings.dart';
 import '../../services/p2p/p2p_settings_service.dart';
 import '../../services/scraper/builtin_providers_settings_service.dart';
@@ -427,6 +428,24 @@ class _SettingsPageState extends State<SettingsPage> {
                         onTap: () => _navigateTo(const AppearanceSettingsPage()),
                       );
                     },
+                  );
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // Support Dev & Project (Dedicated Section)
+              ValueListenableBuilder<bool>(
+                valueListenable: HomePageSettings.enableSupportDev,
+                builder: (context, isSupportEnabled, _) {
+                  return _SettingsCategoryTile(
+                    icon: Icons.favorite_rounded,
+                    iconColor: const Color(0xFFFFB300),
+                    title: 'Support The Developer',
+                    subtitle: '1-click ad sponsor, help with uni tuition, and card visibility',
+                    badgeText: isSupportEnabled ? 'Active' : 'Hidden',
+                    badgeColor: isSupportEnabled ? const Color(0xFFFFB300) : Colors.white38,
+                    onTap: () => _navigateTo(const SupportDevSettingsPage()),
                   );
                 },
               ),

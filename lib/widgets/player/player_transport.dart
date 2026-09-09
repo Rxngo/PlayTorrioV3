@@ -241,7 +241,7 @@ class PlayerTransport extends StatelessWidget {
                     size: btnSize,
                     iconSize: btnIconSize,
                     icon: const Icon(Icons.aspect_ratio_rounded),
-                    tooltip: 'Aspect Ratio',
+                    tooltip: 'Aspect Ratio (C)',
                     onPressed: onToggleAspectMenu,
                   ),
 
@@ -303,7 +303,7 @@ class PlayerTransport extends StatelessWidget {
                       icon: Icon(
                         isFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
                       ),
-                      tooltip: isFullscreen ? 'Exit Fullscreen' : 'Fullscreen',
+                      tooltip: isFullscreen ? 'Exit Fullscreen (F)' : 'Fullscreen (F)',
                       onPressed: onToggleFullscreen,
                     ),
                   ],

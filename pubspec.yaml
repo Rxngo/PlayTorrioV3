@@ -171,3 +171,8 @@ flutter:
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
+    - family: PlayfairDisplay
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-SemiBoldItalic.ttf
+          weight: 600
+          style: italic

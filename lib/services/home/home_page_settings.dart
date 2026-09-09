@@ -74,6 +74,7 @@ abstract final class HomePageSettings {
   static const _keyAmbientSpeed = 'home_ambient_speed';
   static const _keyEnableCalendar = 'app_enable_calendar';
   static const _keyEnableAiQuiz = 'app_enable_ai_quiz';
+  static const _keyEnableSupportDev = 'home_enable_support_dev';
 
   static final ValueNotifier<bool> enableSpotlight = ValueNotifier<bool>(true);
   static final ValueNotifier<bool> enableSimilar = ValueNotifier<bool>(true);
@@ -82,6 +83,7 @@ abstract final class HomePageSettings {
   static final ValueNotifier<bool> enableSimklRecommendations = ValueNotifier<bool>(true);
   static final ValueNotifier<bool> enableCalendar = ValueNotifier<bool>(true);
   static final ValueNotifier<bool> enableAiQuiz = ValueNotifier<bool>(true);
+  static final ValueNotifier<bool> enableSupportDev = ValueNotifier<bool>(true);
   static final ValueNotifier<SimilarSectionPosition> similarPosition =
       ValueNotifier<SimilarSectionPosition>(SimilarSectionPosition.top);
   static final ValueNotifier<HeroStyle> heroStyle =
@@ -119,6 +121,7 @@ abstract final class HomePageSettings {
     enableSimklRecommendations.value = prefs.getBool(_keyEnableSimklRec) ?? true;
     enableCalendar.value = prefs.getBool(_keyEnableCalendar) ?? true;
     enableAiQuiz.value = prefs.getBool(_keyEnableAiQuiz) ?? true;
+    enableSupportDev.value = prefs.getBool(_keyEnableSupportDev) ?? true;
 
     final posStr = prefs.getString(_keySimilarPosition);
     similarPosition.value = SimilarSectionPosition.values.firstWhere(
@@ -229,6 +232,13 @@ abstract final class HomePageSettings {
     enableAiQuiz.value = val;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyEnableAiQuiz, val);
+    changeNotifier.value++;
+  }
+
+  static Future<void> setEnableSupportDev(bool val) async {
+    enableSupportDev.value = val;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyEnableSupportDev, val);
     changeNotifier.value++;
   }
 

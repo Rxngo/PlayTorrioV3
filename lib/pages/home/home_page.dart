@@ -21,6 +21,7 @@ import '../../widgets/common/animated_ambient_background.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/home/continue_watching_slider.dart';
 import '../../widgets/movie/movie_slider_section.dart';
+import '../../widgets/home/support_dev_cards.dart';
 import '../search/search_page.dart';
 import '../ai/wewatch_quiz_page.dart';
 import '../calendar/tv_calendar_page.dart';
@@ -32,6 +33,8 @@ import '../../services/updater/app_updater_service.dart';
 import '../../widgets/updater/update_dialog.dart';
 import '../../services/p2p/p2p_settings_service.dart';
 import '../../widgets/p2p/p2p_warning_dialog.dart';
+import 'package:flutter/services.dart';
+import '../../services/window/window_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -371,6 +374,7 @@ class _HomePageState extends State<HomePage> {
                       return MovieSliderSection(
                         section: _sections[sectionIdx],
                         showCalendarButton: calEnabled && isLastTwo,
+                        injectSupportCard: sectionIdx == 0,
                       );
                     },
                   );
@@ -383,7 +387,34 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       backgroundColor: palette.scaffoldBackgroundColor,
-      body: _buildBody(backgroundContent, topPadding, context),
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            final primaryFocus = FocusManager.instance.primaryFocus;
+            if (primaryFocus != null && primaryFocus.context != null) {
+              final focusedWidget = primaryFocus.context!.widget;
+              if (focusedWidget is EditableText) {
+                return KeyEventResult.ignored;
+              }
+            }
+            if (event.logicalKey == LogicalKeyboardKey.keyF ||
+                event.logicalKey == LogicalKeyboardKey.f11) {
+              if (WindowService.instance.isDesktop) {
+                WindowService.instance.toggleFullscreen();
+                return KeyEventResult.handled;
+              }
+            } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+              if (WindowService.instance.isDesktop && WindowService.instance.isFullscreen) {
+                WindowService.instance.exitFullscreen();
+                return KeyEventResult.handled;
+              }
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: _buildBody(backgroundContent, topPadding, context),
+      ),
     );
   }
 
@@ -657,6 +688,7 @@ class _GlassAppBar extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.65),
                     size: 24,
                   ),
+                  tooltip: 'Settings',
                   onPressed: () {
                     final box = context.findRenderObject() as RenderBox?;
                     final offset = box?.localToGlobal(box.size.center(Offset.zero));
@@ -665,6 +697,24 @@ class _GlassAppBar extends StatelessWidget {
                 );
               },
             ),
+            // Fullscreen Toggle (Desktops only)
+            if (WindowService.instance.isDesktop)
+              ValueListenableBuilder<bool>(
+                valueListenable: WindowService.instance.isFullscreenNotifier,
+                builder: (context, isFullscreen, _) {
+                  return IconButton(
+                    icon: Icon(
+                      isFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                      color: isFullscreen
+                          ? const Color(0xFFFFB300)
+                          : Colors.white.withValues(alpha: 0.75),
+                      size: 24,
+                    ),
+                    tooltip: isFullscreen ? 'Exit Fullscreen (F)' : 'Fullscreen (F)',
+                    onPressed: () => WindowService.instance.toggleFullscreen(),
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -735,14 +785,24 @@ class _HeroCarouselState extends State<_HeroCarousel> {
     super.dispose();
   }
 
+  bool get _showSupportSlide => HomePageSettings.enableSupportDev.value;
+  int get _supportSlideIndex => widget.movies.isNotEmpty ? 1 : 0;
+  int get _totalSlideCount => widget.movies.length + (_showSupportSlide ? 1 : 0);
+
+  int? _movieIndexForSlide(int slideIndex) {
+    if (!_showSupportSlide) return slideIndex;
+    if (slideIndex == _supportSlideIndex) return null;
+    return slideIndex > _supportSlideIndex ? slideIndex - 1 : slideIndex;
+  }
+
   void _startTimer() {
     _timer?.cancel();
     if (!HomePageSettings.heroAutoRotate.value) return;
-    if (widget.movies.length < 2) return;
+    if (_totalSlideCount < 2) return;
     final interval = Duration(seconds: HomePageSettings.heroRotateSeconds.value);
     _timer = Timer.periodic(interval, (_) {
       if (!mounted || !_pageController.hasClients) return;
-      final next = (_index + 1) % widget.movies.length;
+      final next = (_index + 1) % _totalSlideCount;
       _pageController.animateToPage(
         next,
         duration: const Duration(milliseconds: 700),
@@ -781,9 +841,15 @@ class _HeroCarouselState extends State<_HeroCarousel> {
 
   void _onPageChanged(int index) {
     setState(() => _index = index);
-    _fetchDetail(widget.movies[index]);
-    final next = (index + 1) % widget.movies.length;
-    _fetchDetail(widget.movies[next]);
+    final curMovieIdx = _movieIndexForSlide(index);
+    if (curMovieIdx != null && curMovieIdx < widget.movies.length) {
+      _fetchDetail(widget.movies[curMovieIdx]);
+    }
+    final nextSlide = (index + 1) % _totalSlideCount;
+    final nextMovieIdx = _movieIndexForSlide(nextSlide);
+    if (nextMovieIdx != null && nextMovieIdx < widget.movies.length) {
+      _fetchDetail(widget.movies[nextMovieIdx]);
+    }
   }
 
   double _heroHeight(double screenWidth, double screenHeight) {
@@ -824,8 +890,11 @@ class _HeroCarouselState extends State<_HeroCarousel> {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final heroHeight = _heroHeight(screenWidth, screenHeight);
     final primaryColor = AppThemeService.currentPalette.value.primaryColor;
+    final totalSlides = _totalSlideCount;
+    final showSupport = _showSupportSlide;
+    final supportIdx = _supportSlideIndex;
 
-    if (widget.movies.isEmpty) {
+    if (totalSlides == 0) {
       return SizedBox(height: heroHeight);
     }
 
@@ -846,10 +915,14 @@ class _HeroCarouselState extends State<_HeroCarousel> {
           children: [
             PageView.builder(
               controller: _pageController,
-              itemCount: widget.movies.length,
+              itemCount: totalSlides,
               onPageChanged: _onPageChanged,
               itemBuilder: (context, i) {
-                final movie = widget.movies[i];
+                if (showSupport && i == supportIdx) {
+                  return SupportHeroSlide(screenWidth: screenWidth);
+                }
+                final movieIdx = _movieIndexForSlide(i)!;
+                final movie = widget.movies[movieIdx];
                 final detail = _detailsCache[movie.id];
                 return _HeroSlide(
                   movie: movie,
@@ -860,15 +933,19 @@ class _HeroCarouselState extends State<_HeroCarousel> {
             ),
 
             // Dot indicators
-            if (widget.movies.length > 1)
+            if (totalSlides > 1)
               Positioned(
                 bottom: 16,
                 left: 0,
                 right: 0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(widget.movies.length, (i) {
+                  children: List.generate(totalSlides, (i) {
                     final active = i == _index;
+                    final isSupportDot = showSupport && i == supportIdx;
+                    final dotColor = active
+                        ? (isSupportDot ? const Color(0xFFFFD700) : primaryColor)
+                        : Colors.white.withValues(alpha: 0.30);
                     return GestureDetector(
                       onTap: () => _goTo(i),
                       child: AnimatedContainer(
@@ -879,13 +956,14 @@ class _HeroCarouselState extends State<_HeroCarousel> {
                         height: 7,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(4),
-                          color: active
-                              ? primaryColor
-                              : Colors.white.withValues(alpha: 0.30),
+                          color: dotColor,
                           boxShadow: active
                               ? [
                                   BoxShadow(
-                                    color: primaryColor.withValues(alpha: 0.55),
+                                    color: (isSupportDot
+                                            ? const Color(0xFFFFD700)
+                                            : primaryColor)
+                                        .withValues(alpha: 0.55),
                                     blurRadius: 8,
                                   ),
                                 ]
@@ -898,7 +976,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
               ),
 
             // Arrows
-            if (widget.movies.length > 1 &&
+            if (totalSlides > 1 &&
                 _isHovering &&
                 screenWidth > 600) ...[
               if (_index > 0)
@@ -913,7 +991,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
                     ),
                   ),
                 ),
-              if (_index < widget.movies.length - 1)
+              if (_index < totalSlides - 1)
                 Positioned(
                   right: 24,
                   top: 0,
