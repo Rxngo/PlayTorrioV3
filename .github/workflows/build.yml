@@ -131,6 +131,9 @@ jobs:
 
       - name: Install Linux build dependencies
         run: |
+          sudo rm -f /etc/apt/sources.list.d/*chrome*.list
+          sudo rm -f /etc/apt/sources.list.d/google*.list
+          sudo apt-get clean
           sudo apt-get update -y
           sudo apt-get install -y \
             clang cmake git ninja-build pkg-config \
