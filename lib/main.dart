@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import './pages/home/home_page.dart';
 import './services/addon/addon_manager.dart';
+import './services/cloudstream/cloudstream_manager.dart';
 import './services/theme/app_theme_service.dart';
 import './services/updater/app_updater_service.dart';
 import './services/books/continue_reading_service.dart';
@@ -32,6 +33,7 @@ import './services/config/env_service.dart';
 import './services/window/window_service.dart';
 import './services/p2p/p2p_settings_service.dart';
 import './services/discord/discord_rpc_service.dart';
+import './services/scraper/builtin_providers_settings_service.dart';
 import './widgets/updater/update_dialog.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -48,6 +50,7 @@ void main() async {
   await PlayerSettings.initialize();
   await Future.wait([
     AddonManager.instance.initialize(),
+    CloudStreamManager.instance.initialize(),
     AppThemeService.initialize(),
     AudiobookSettings.initialize(),
     ContinueWatchingService.initialize(),
@@ -68,6 +71,7 @@ void main() async {
     DownloadService.instance.initialize(),
     TorrentStreamService().start(),
     DiscordRpcService.instance.initialize(),
+    BuiltinProvidersSettingsService.instance.init(),
   ]);
   runApp(const PlayTorrioApp());
 }

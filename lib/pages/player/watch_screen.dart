@@ -14,6 +14,7 @@ import '../../models/movie/video.dart';
 import '../../models/movie/movie_detail.dart';
 
 import '../../models/stream/stream_model.dart';
+import '../../models/subtitle/subtitle_model.dart';
 import './player_screen.dart';
 import '../../services/addon/addon_manager.dart';
 import '../../services/stream/stream_service.dart';
@@ -85,8 +86,20 @@ class _WatchScreenState extends State<WatchScreen>
   // Stream sources
   final List<StreamSource> _sources = [];
   final List<StreamSource> _pendingSources = [];
+  final List<SubtitleVariant> _discoveredSubtitles = [];
+  final Set<String> _seenSubtitleUrls = {};
   Timer? _sourceBatchTimer;
   bool _isLoadingSources = true;
+  StreamSubscription<StreamSource>? _streamSub;
+
+  void _recordSubtitles(List<SubtitleVariant>? subs) {
+    if (subs == null || subs.isEmpty) return;
+    for (final s in subs) {
+      if (_seenSubtitleUrls.add(s.downloadUrl.toLowerCase())) {
+        _discoveredSubtitles.add(s);
+      }
+    }
+  }
 
   // Animation
   late AnimationController _animController;
@@ -137,6 +150,9 @@ class _WatchScreenState extends State<WatchScreen>
 
   @override
   void dispose() {
+    _streamSub?.cancel();
+    _streamSub = null;
+    StreamService.stopAllScrapers();
     _sourceBatchTimer?.cancel();
     _animController.dispose();
     _sourcesScrollController.dispose();
@@ -145,10 +161,17 @@ class _WatchScreenState extends State<WatchScreen>
   }
 
   Future<void> _loadStreams() async {
+    _streamSub?.cancel();
+    _streamSub = null;
+    StreamService.stopAllScrapers();
+
     final streamId = widget.selectedEpisode?.id ?? widget.detail.id;
 
     // 1. Immediately inject any embedded streams from the video (e.g. Torbox/Debrid direct streams)
     if (widget.selectedEpisode != null && widget.selectedEpisode!.streams.isNotEmpty) {
+      for (final s in widget.selectedEpisode!.streams) {
+        _recordSubtitles(s.subtitles);
+      }
       _pendingSources.addAll(widget.selectedEpisode!.streams);
       _flushPendingSources();
     }
@@ -165,16 +188,18 @@ class _WatchScreenState extends State<WatchScreen>
     final effectiveSeason = isColl ? null : widget.selectedEpisode?.season;
     final effectiveEpisode = isColl ? null : widget.selectedEpisode?.episode;
 
-    try {
-      await for (final source in StreamService.fetchStreams(
-        type: effectiveType,
-        id: streamId,
-        title: effectiveTitle,
-        year: effectiveYear,
-        season: effectiveSeason,
-        episode: effectiveEpisode,
-      )) {
+    _streamSub = StreamService.fetchStreams(
+      type: effectiveType,
+      id: streamId,
+      title: effectiveTitle,
+      year: effectiveYear,
+      season: effectiveSeason,
+      episode: effectiveEpisode,
+      genres: widget.detail.genres,
+    ).listen(
+      (source) {
         if (!mounted) return;
+        _recordSubtitles(source.subtitles);
         _pendingSources.add(source);
         if (_sources.isEmpty) {
           _flushPendingSources();
@@ -184,13 +209,15 @@ class _WatchScreenState extends State<WatchScreen>
             _flushPendingSources,
           );
         }
-      }
-    } catch (_) {}
-
-    _flushPendingSources();
-    if (mounted && _isLoadingSources) {
-      setState(() => _isLoadingSources = false);
-    }
+      },
+      onError: (_) {},
+      onDone: () {
+        _flushPendingSources();
+        if (mounted && _isLoadingSources) {
+          setState(() => _isLoadingSources = false);
+        }
+      },
+    );
   }
 
   void _flushPendingSources() {
@@ -495,7 +522,7 @@ class _WatchScreenState extends State<WatchScreen>
             bottom: 24,
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Left: info region
               Expanded(
@@ -508,7 +535,7 @@ class _WatchScreenState extends State<WatchScreen>
               ),
               const SizedBox(width: 32),
               // Right: sources panel (extends to right edge)
-              Flexible(
+              Expanded(
                 flex: rightFlex,
                 child: Padding(
                   padding: const EdgeInsets.only(right: 24),
@@ -677,6 +704,7 @@ class _WatchScreenState extends State<WatchScreen>
                         detail: widget.detail,
                         episode: widget.selectedEpisode,
                         initialPosition: widget.initialPosition,
+                        initialSubtitles: _discoveredSubtitles,
                       ),
                     );
                   },
@@ -1216,13 +1244,8 @@ class _WatchScreenState extends State<WatchScreen>
 
         // Source list
         if (isDesktop)
-          Flexible(
-            flex: 1,
-            child: SingleChildScrollView(
-              controller: _sourcesScrollController,
-              physics: const BouncingScrollPhysics(),
-              child: _buildSourcesList(filtered, isDesktop),
-            ),
+          Expanded(
+            child: _buildSourcesList(filtered, isDesktop),
           )
         else
           _buildSourcesList(filtered, isDesktop),
@@ -1287,6 +1310,7 @@ class _WatchScreenState extends State<WatchScreen>
           detail: widget.detail,
           episode: widget.selectedEpisode,
           initialPosition: widget.initialPosition,
+          initialSubtitles: _discoveredSubtitles,
         );
       },
     );
@@ -2784,6 +2808,7 @@ class _SourceCard extends StatefulWidget {
   final MovieDetail detail;
   final Video? episode;
   final Duration? initialPosition;
+  final List<SubtitleVariant>? initialSubtitles;
 
   const _SourceCard({
     required this.source,
@@ -2792,6 +2817,7 @@ class _SourceCard extends StatefulWidget {
     required this.detail,
     this.episode,
     this.initialPosition,
+    this.initialSubtitles,
   });
 
   @override
@@ -2935,6 +2961,7 @@ class _SourceCardState extends State<_SourceCard> {
                     detail: widget.detail,
                     episode: widget.episode,
                     initialPosition: widget.initialPosition,
+                    initialSubtitles: widget.initialSubtitles,
                   ),
                 ),
               );

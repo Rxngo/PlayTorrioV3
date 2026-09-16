@@ -54,6 +54,7 @@ class PlayerScreen extends StatefulWidget {
   final MovieDetail? detail;
   final Video? episode;
   final Duration? initialPosition;
+  final List<SubtitleVariant>? initialSubtitles;
 
   const PlayerScreen({
     super.key,
@@ -64,6 +65,7 @@ class PlayerScreen extends StatefulWidget {
     this.detail,
     this.episode,
     this.initialPosition,
+    this.initialSubtitles,
   });
 
   @override
@@ -96,13 +98,46 @@ class _PlayerScreenState extends State<PlayerScreen>
   DateTime? _lastPointerTimerReset;
   late AnimationController _logoAnimController;
 
+  // Frame Watchdog & Automatic Black Screen Recovery State
+  Timer? _frameWatchdogTimer;
+  bool _hasFallenBackToSoftware = false;
+  bool _hasReceivedFirstVideoFrame = false;
+  String? _fallbackNoticeText;
+  Timer? _fallbackNoticeTimer;
+
   // Active Menu / Popover
   String? _activeMenu; // 'subtitle' | 'audio' | 'speed' | 'aspect' | 'style' | null
   bool _showSubSyncBar = false;
   bool _showTextSyncOverlay = false;
 
+  // Platform helper
+  bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  // Mobile Lock State
+  bool _isLocked = false;
+  bool _showUnlockButton = false;
+  Timer? _unlockButtonTimer;
+
+  // Visual Brightness & Overlay State (0.0 = pitch black, 1.0 = default 100%, 1.5 = 150% boost)
+  double _brightness = 1.0;
+  bool _showBrightnessHud = false;
+  Timer? _brightnessHudTimer;
+
+  // Touch & Drag Gesture State
+  bool _isDraggingBrightness = false;
+  bool _isDraggingVolume = false;
+  double _dragStartY = 0.0;
+  double _dragStartValue = 0.0;
+
+  // Long-Press 2x Speed State
+  bool _isFastForwarding = false;
+  double _rateBeforeHold = 1.0;
+  bool _wasPausedBeforeHold = false;
+
+  Timer? _volumeSaveDebounceTimer;
+
   // Playback & Audio State
-  double _volume = 1.0;
+  late double _volume = PlayerSettings.savedVolume.value;
   double _lastVolumeBeforeMute = 1.0;
   bool _isMuted = false;
   bool _showVolumeHud = false;
@@ -156,6 +191,15 @@ class _PlayerScreenState extends State<PlayerScreen>
     _currentSource = widget.source;
     _currentEpisode = widget.episode;
     _currentTitle = widget.title;
+    _volume = PlayerSettings.savedVolume.value;
+    _isMuted = _volume == 0;
+
+    if (widget.initialSubtitles != null && widget.initialSubtitles!.isNotEmpty) {
+      _loadSourceSubtitles(widget.initialSubtitles!);
+    }
+    if (_currentSource.subtitles != null && _currentSource.subtitles!.isNotEmpty) {
+      _loadSourceSubtitles(_currentSource.subtitles!);
+    }
 
     WakelockPlus.enable();
     _logoAnimController = AnimationController(
@@ -228,6 +272,8 @@ class _PlayerScreenState extends State<PlayerScreen>
   }
 
   Future<void> _initStream() async {
+    _hasFallenBackToSoftware = false;
+    _hasReceivedFirstVideoFrame = false;
     String? streamUrl;
 
     print('[PlayerScreen] Initializing playback:');
@@ -249,6 +295,7 @@ class _PlayerScreenState extends State<PlayerScreen>
         await PlayerSettings.applyPostOpenProperties(_player);
         _setSubtitleScale(_subtitleScale);
         _applyVolume(_isMuted ? 0.0 : _volume);
+        _startFrameWatchdog();
         if (mounted) setState(() => _isLoading = false);
         return;
       }
@@ -401,6 +448,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       });
 
       _player.play();
+      _startFrameWatchdog();
       _startHideControlsTimer();
 
       // Defer background services until after playback starts
@@ -471,8 +519,100 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
   }
 
+  void _startFrameWatchdog() {
+    _frameWatchdogTimer?.cancel();
+    if (!PlayerSettings.autoRecoverBlackScreen.value) return;
+
+    // Listen to first frame rendered directly from VideoController
+    _videoController.waitUntilFirstFrameRendered.then((_) {
+      if (mounted) {
+        _hasReceivedFirstVideoFrame = true;
+        debugPrint('[PlayerWatchdog] First video frame rendered successfully.');
+      }
+    }).catchError((_) {});
+
+    _frameWatchdogTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      // If video frames are verified or width/height are populated, we have frames!
+      if (_hasReceivedFirstVideoFrame || (_player.state.width != null && _player.state.width! > 0)) {
+        _hasReceivedFirstVideoFrame = true;
+        if (_player.state.width != null && _player.state.width! > 0) {
+          timer.cancel();
+          return;
+        }
+      }
+
+      // Black screen watchdog condition:
+      // Audio is actively playing past 2.5 seconds, but video width is null or 0 and no frame has rendered
+      final bool isAudioGhosting = _isPlaying &&
+          _position > const Duration(milliseconds: 2500) &&
+          !_hasReceivedFirstVideoFrame &&
+          (_player.state.width == null || _player.state.width == 0);
+
+      if (isAudioGhosting && !_hasFallenBackToSoftware) {
+        timer.cancel();
+        _triggerSoftwareFallback(reason: 'Audio playing without video frames (decoder deadlock)');
+      }
+    });
+  }
+
+  Future<void> _triggerSoftwareFallback({required String reason}) async {
+    if (_hasFallenBackToSoftware) return;
+    _hasFallenBackToSoftware = true;
+
+    debugPrint('[PlayerWatchdog] TRIGGERING AUTOMATIC FALLBACK TO SOFTWARE DECODING: $reason');
+
+    if (mounted) {
+      setState(() {
+        _fallbackNoticeText = '⚠️ Black screen detected • Switched to Software Mode';
+      });
+      _fallbackNoticeTimer?.cancel();
+      _fallbackNoticeTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _fallbackNoticeText = null);
+      });
+    }
+
+    final success = await PlayerSettings.fallbackToSoftware(_player);
+    if (!success || (_player.state.width == null || _player.state.width == 0)) {
+      debugPrint('[PlayerWatchdog] Re-syncing stream with software decoding...');
+      if (_activeStreamUrl != null && mounted) {
+        try {
+          final resumePos = _position > Duration.zero ? _position : _player.state.position;
+          final platform = _player.platform as dynamic;
+          await platform?.setProperty('hwdec', 'no');
+          await platform?.setProperty('glsl-shaders', '');
+          await platform?.setProperty('vid', 'auto');
+          await _player.open(
+            Media(_activeStreamUrl!, start: resumePos),
+            play: true,
+          );
+        } catch (e) {
+          debugPrint('[PlayerWatchdog] Reload error during fallback: $e');
+        }
+      }
+    }
+  }
+
   void _updateMediaTracks(Tracks tracks) {
     if (!mounted) return;
+
+    // Ensure video track is active if present
+    final videoTracks = tracks.video;
+    if (videoTracks.isNotEmpty) {
+      final activeVid = _player.state.track.video.id;
+      if (activeVid == 'no') {
+        debugPrint('[PlayerScreen] Video track was disabled. Re-enabling video track auto...');
+        try {
+          final dynamic platform = _player.platform;
+          platform?.setProperty('vid', 'auto');
+        } catch (_) {}
+      }
+    }
+
     final audioList = tracks.audio;
     final audioTracks = <PlayerAudioTrack>[];
     for (int i = 0; i < audioList.length; i++) {
@@ -556,25 +696,25 @@ class _PlayerScreenState extends State<PlayerScreen>
 
       print('[PlayerScreen] Scraping initial subtitles for "$showName" (year: $targetYear, imdb: $targetImdbId)...');
 
-      final groups = await SubtitleService().fetchAllSubtitles(
+      await for (final batch in SubtitleService().streamSubtitles(
         showName,
         imdbId: targetImdbId,
         season: targetSeason,
         episode: targetEpisode,
         year: targetYear,
-      );
-      print('[PlayerScreen] Scraped ${groups.length} subtitle language groups with ${groups.fold(0, (s, g) => s + g.variants.length)} total variants');
-      if (mounted && groups.isNotEmpty) {
-        setState(() => _subtitleGroups = groups);
+      )) {
+        if (!mounted || batch.isEmpty) continue;
+        final newGroups = SubtitleService.groupVariantsByLanguage(batch);
+        setState(() => _subtitleGroups = _mergeSubtitleGroups(_subtitleGroups, newGroups));
 
-        // Auto-load matching language subtitle for the new episode if subtitles were enabled
-        if (_isSubtitleEnabled && _currentSubtitleVariant != null) {
+        // Auto-load matching language subtitle for the new episode if subtitles were enabled and none loaded yet
+        if (_isSubtitleEnabled && _currentSubtitleVariant != null && _currentSubtitlePath == null) {
           final previousLang = _currentSubtitleVariant!.language.toLowerCase();
-          final matchingGroup = groups.firstWhere(
+          final matchingGroup = _subtitleGroups.firstWhere(
             (g) => g.language.toLowerCase() == previousLang,
-            orElse: () => groups.firstWhere(
+            orElse: () => _subtitleGroups.firstWhere(
               (g) => g.language.toLowerCase().contains('english') || g.language.toLowerCase() == 'en',
-              orElse: () => groups.first,
+              orElse: () => _subtitleGroups.first,
             ),
           );
           if (matchingGroup.variants.isNotEmpty) {
@@ -585,6 +725,39 @@ class _PlayerScreenState extends State<PlayerScreen>
     } catch (e) {
       debugPrint('[PlayerScreen] Error loading subtitles: $e');
     }
+  }
+
+  void _loadSourceSubtitles(List<SubtitleVariant> subs) {
+    if (subs.isEmpty) return;
+    final Map<String, List<SubtitleVariant>> grouped = {};
+    for (final s in subs) {
+      grouped.putIfAbsent(s.language, () => []).add(s);
+    }
+    final sourceGroups = grouped.entries.map((e) {
+      return SubtitleLanguageGroup(language: e.key, variants: e.value);
+    }).toList();
+    _subtitleGroups = _mergeSubtitleGroups(_subtitleGroups, sourceGroups);
+    debugPrint('[PlayerScreen] Loaded ${subs.length} direct stream subtitles across ${sourceGroups.length} language groups');
+  }
+
+  static List<SubtitleLanguageGroup> _mergeSubtitleGroups(
+    List<SubtitleLanguageGroup> existing,
+    List<SubtitleLanguageGroup> incoming,
+  ) {
+    final Map<String, List<SubtitleVariant>> map = {};
+    for (final g in existing) {
+      map.putIfAbsent(g.language, () => []).addAll(g.variants);
+    }
+    for (final g in incoming) {
+      final list = map.putIfAbsent(g.language, () => []);
+      for (final v in g.variants) {
+        if (!list.any((existingV) => existingV.downloadUrl == v.downloadUrl)) {
+          list.add(v);
+        }
+      }
+    }
+    final sortedKeys = map.keys.toList()..sort((a, b) => a.compareTo(b));
+    return sortedKeys.map((lang) => SubtitleLanguageGroup(language: lang, variants: map[lang]!)).toList();
   }
 
   void _startHideControlsTimer() {
@@ -798,6 +971,15 @@ class _PlayerScreenState extends State<PlayerScreen>
     final errorMsg = err.toString();
     final lower = errorMsg.toLowerCase();
 
+    // 0. Hardware decoder / shader pipeline error detection & recovery
+    if (PlayerSettings.isHardwareDecoderError(err) &&
+        !_hasFallenBackToSoftware &&
+        PlayerSettings.autoRecoverBlackScreen.value) {
+      debugPrint('[PlayerScreen] Hardware decoder error detected in error stream: $errorMsg');
+      _triggerSoftwareFallback(reason: 'Hardware decoder error: $errorMsg');
+      return;
+    }
+
     // 1. Subtitle track loading errors - non-fatal, notify user briefly without interrupting playback
     if (lower.contains('can not open external file') ||
         lower.contains('subtitle') ||
@@ -880,6 +1062,32 @@ class _PlayerScreenState extends State<PlayerScreen>
     }
 
     _player.setVolume(clamped * 100.0);
+
+    _volumeSaveDebounceTimer?.cancel();
+    _volumeSaveDebounceTimer = Timer(const Duration(milliseconds: 350), () {
+      PlayerSettings.setSavedVolume(clamped);
+    });
+  }
+
+  void _applyBrightness(double val, {bool showHud = false}) {
+    final clamped = ((val * 100).round() / 100.0).clamp(0.0, 1.5);
+    setState(() {
+      _brightness = clamped;
+      if (showHud) _showBrightnessHud = true;
+    });
+
+    if (showHud) {
+      _brightnessHudTimer?.cancel();
+      _brightnessHudTimer = Timer(const Duration(milliseconds: 1300), () {
+        if (mounted) setState(() => _showBrightnessHud = false);
+      });
+    }
+
+    try {
+      final np = _player.platform as dynamic;
+      final mpvBrightness = ((clamped - 1.0) * 100).round().clamp(-100, 100);
+      np.setProperty('brightness', mpvBrightness.toString());
+    } catch (_) {}
   }
 
   void _toggleMute({bool showHud = false}) {
@@ -967,6 +1175,9 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _switchStream(StreamSource newSource, Video newEpisode) async {
     _progressSaveTimer?.cancel();
+    _frameWatchdogTimer?.cancel();
+    _fallbackNoticeTimer?.cancel();
+    _fallbackNoticeText = null;
     _savePlaybackProgress();
 
     final prevVariant = _currentSubtitleVariant;
@@ -996,6 +1207,10 @@ class _PlayerScreenState extends State<PlayerScreen>
       _currentSubtitleVariant = prevVariant;
       _isSubtitleEnabled = wasSubEnabled;
     });
+
+    if (newSource.subtitles != null && newSource.subtitles!.isNotEmpty) {
+      _loadSourceSubtitles(newSource.subtitles!);
+    }
 
     // Cleanup previous torrent engine if was P2P
     TorrentStreamService().cleanup();
@@ -1149,7 +1364,12 @@ class _PlayerScreenState extends State<PlayerScreen>
       s.cancel();
     }
     _progressSaveTimer?.cancel();
+    _frameWatchdogTimer?.cancel();
+    _fallbackNoticeTimer?.cancel();
     _volumeHudTimer?.cancel();
+    _brightnessHudTimer?.cancel();
+    _unlockButtonTimer?.cancel();
+    _volumeSaveDebounceTimer?.cancel();
     _audioHudTimer?.cancel();
     _aspectHudTimer?.cancel();
     _savePlaybackProgress();
@@ -1178,9 +1398,152 @@ class _PlayerScreenState extends State<PlayerScreen>
     PlayerSettings.applyToPlayer(_player);
   }
 
+  void _lockPlayer() {
+    setState(() {
+      _isLocked = true;
+      _showControls = false;
+      _activeMenu = null;
+      _showUnlockButton = true;
+    });
+    HapticFeedback.mediumImpact();
+    _startUnlockButtonTimer();
+  }
+
+  void _unlockPlayer() {
+    _unlockButtonTimer?.cancel();
+    setState(() {
+      _isLocked = false;
+      _showUnlockButton = false;
+      _showControls = true;
+    });
+    HapticFeedback.mediumImpact();
+    _startHideControlsTimer();
+  }
+
+  void _startUnlockButtonTimer() {
+    _unlockButtonTimer?.cancel();
+    _unlockButtonTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _isLocked) {
+        setState(() => _showUnlockButton = false);
+      }
+    });
+  }
+
+  void _handleLongPressStart(LongPressStartDetails details) {
+    if (_isLocked || _isLoading) return;
+    if (_activeMenu != null) return;
+
+    _rateBeforeHold = _player.state.rate > 0 ? _player.state.rate : 1.0;
+    _wasPausedBeforeHold = !_player.state.playing;
+    _isFastForwarding = true;
+    _player.setRate(2.0);
+    if (_wasPausedBeforeHold) {
+      _player.play();
+    }
+    HapticFeedback.mediumImpact();
+    setState(() {});
+  }
+
+  void _handleLongPressEnd(LongPressEndDetails details) {
+    if (!_isFastForwarding) return;
+    _isFastForwarding = false;
+    _player.setRate(_rateBeforeHold);
+    if (_wasPausedBeforeHold) {
+      _player.pause();
+    }
+    HapticFeedback.lightImpact();
+    setState(() {});
+  }
+
+  void _handleLongPressCancel() {
+    if (!_isFastForwarding) return;
+    _isFastForwarding = false;
+    _player.setRate(_rateBeforeHold);
+    if (_wasPausedBeforeHold) {
+      _player.pause();
+    }
+    setState(() {});
+  }
+
+  void _handleVerticalDragStart(DragStartDetails details) {
+    if (_isLocked || _isLoading) return;
+    if (_activeMenu != null) return;
+
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    _dragStartY = details.globalPosition.dy;
+
+    if (details.globalPosition.dx < screenWidth / 2) {
+      // Left side: Brightness
+      _isDraggingBrightness = true;
+      _isDraggingVolume = false;
+      _dragStartValue = _brightness;
+      setState(() => _showBrightnessHud = true);
+      _brightnessHudTimer?.cancel();
+    } else {
+      // Right side: Volume
+      _isDraggingBrightness = false;
+      _isDraggingVolume = true;
+      _dragStartValue = _volume;
+      setState(() => _showVolumeHud = true);
+      _volumeHudTimer?.cancel();
+    }
+  }
+
+  void _handleVerticalDragUpdate(DragUpdateDetails details) {
+    if (_isLocked || _isLoading) return;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final double deltaDy = _dragStartY - details.globalPosition.dy;
+    final double sensitivity = 1.3 / (screenHeight * 0.65);
+    final double deltaValue = deltaDy * sensitivity;
+
+    if (_isDraggingBrightness) {
+      final newBrightness = (_dragStartValue + deltaValue).clamp(0.0, 1.5);
+      _applyBrightness(newBrightness, showHud: true);
+    } else if (_isDraggingVolume) {
+      final newVolume = (_dragStartValue + deltaValue).clamp(0.0, PlayerVolumeControl.maxVolume);
+      _applyVolume(newVolume, showHud: true);
+    }
+  }
+
+  void _handleVerticalDragEnd(DragEndDetails details) {
+    _isDraggingBrightness = false;
+    _isDraggingVolume = false;
+
+    _brightnessHudTimer?.cancel();
+    _brightnessHudTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (mounted) setState(() => _showBrightnessHud = false);
+    });
+
+    _volumeHudTimer?.cancel();
+    _volumeHudTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (mounted) setState(() => _showVolumeHud = false);
+    });
+  }
+
+  void _handleVerticalDragCancel() {
+    _isDraggingBrightness = false;
+    _isDraggingVolume = false;
+    if (mounted) {
+      setState(() {
+        _showBrightnessHud = false;
+        _showVolumeHud = false;
+      });
+    }
+  }
+
   DateTime? _lastScreenTapTime;
 
   void _handleScreenTap() {
+    if (_isLocked) {
+      setState(() {
+        _showUnlockButton = !_showUnlockButton;
+      });
+      if (_showUnlockButton) {
+        _startUnlockButtonTimer();
+      }
+      return;
+    }
+
     final now = DateTime.now();
     if (_lastScreenTapTime != null &&
         now.difference(_lastScreenTapTime!) < const Duration(milliseconds: 280)) {
@@ -1195,10 +1558,22 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: true,
+      canPop: !_isLocked,
       onPopInvokedWithResult: (didPop, _) {
-        if (!_wasFullscreenBeforeEntering && WindowService.instance.isFullscreen) {
-          WindowService.instance.exitFullscreen();
+        if (didPop) {
+          if (!_wasFullscreenBeforeEntering && WindowService.instance.isFullscreen) {
+            WindowService.instance.exitFullscreen();
+          }
+        } else if (_isLocked) {
+          setState(() => _showUnlockButton = true);
+          _startUnlockButtonTimer();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Screen is locked. Tap the lock icon to unlock.'),
+              duration: Duration(seconds: 2),
+              backgroundColor: Color(0xFF131722),
+            ),
+          );
         }
       },
       child: Scaffold(
@@ -1274,6 +1649,13 @@ class _PlayerScreenState extends State<PlayerScreen>
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: _handleScreenTap,
+                onLongPressStart: _handleLongPressStart,
+                onLongPressEnd: _handleLongPressEnd,
+                onLongPressCancel: _handleLongPressCancel,
+                onVerticalDragStart: _handleVerticalDragStart,
+                onVerticalDragUpdate: _handleVerticalDragUpdate,
+                onVerticalDragEnd: _handleVerticalDragEnd,
+                onVerticalDragCancel: _handleVerticalDragCancel,
                 child: _buildPlayerBody(),
               ),
             ),
@@ -1285,20 +1667,62 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   Widget _buildBackgroundStack() {
     return Stack(
+      fit: StackFit.expand,
       children: [
-        // Loading Backdrop
-        if (_isLoading && widget.backdropUrl != null)
+        // 1. Video Player Surface is ALWAYS mounted in the render tree to guarantee
+        // texture / Android surface initialization and eliminate black screen deadlocks.
+        SizedBox.expand(
+          child: ValueListenableBuilder<int>(
+            valueListenable: PlayerSettings.changeNotifier,
+            builder: (context, _, __) {
+              return mk.Video(
+                controller: _videoController,
+                fit: _videoFit,
+                controls: mk.NoVideoControls,
+                subtitleViewConfiguration: PlayerSettings.getSubtitleViewConfiguration(),
+              );
+            },
+          ),
+        ),
+
+        // Visual Brightness Overlay:
+        // Down to 0 makes the screen completely pitch black.
+        // Above 1.0 up to 1.5 boosts highlights and brightness.
+        if (_brightness < 1.0)
           Positioned.fill(
-            child: Opacity(
-              opacity: 0.4,
-              child: Image.network(widget.backdropUrl!, fit: BoxFit.cover),
+            child: IgnorePointer(
+              child: Container(
+                color: Colors.black.withValues(
+                  alpha: (1.0 - _brightness).clamp(0.0, 1.0),
+                ),
+              ),
+            ),
+          )
+        else if (_brightness > 1.0)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                color: Colors.white.withValues(
+                  alpha: ((_brightness - 1.0) * 0.40).clamp(0.0, 0.35),
+                ),
+              ),
             ),
           ),
 
-        // Video Player
-        Center(
-          child: _isLoading
-              ? Column(
+        // 2. Loading / Buffering Overlay (rendered over the video during loading)
+        if (_isLoading) ...[
+          if (widget.backdropUrl != null)
+            Positioned.fill(
+              child: Opacity(
+                opacity: 0.4,
+                child: Image.network(widget.backdropUrl!, fit: BoxFit.cover),
+              ),
+            ),
+          Positioned.fill(
+            child: Container(
+              color: widget.backdropUrl != null ? Colors.black54 : Colors.black,
+              child: Center(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (widget.logoUrl != null)
@@ -1332,21 +1756,11 @@ class _PlayerScreenState extends State<PlayerScreen>
                       ),
                     ),
                   ],
-                )
-              : SizedBox.expand(
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: PlayerSettings.changeNotifier,
-                    builder: (context, _, __) {
-                      return mk.Video(
-                        controller: _videoController,
-                        fit: _videoFit,
-                        controls: mk.NoVideoControls,
-                        subtitleViewConfiguration: PlayerSettings.getSubtitleViewConfiguration(),
-                      );
-                    },
-                  ),
                 ),
-        ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1480,15 +1894,57 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
           ),
 
+        // Automatic Fallback / Black Screen Recovery Notice HUD
+        if (_fallbackNoticeText != null)
+          Positioned(
+            top: 70,
+            left: 24,
+            right: 24,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF131722).withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.7), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.shield_rounded, color: Colors.amber, size: 18),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        _fallbackNoticeText!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
         // Top Header Bar
         Positioned(
           top: 0,
           left: 0,
           right: 0,
           child: IgnorePointer(
-            ignoring: (!_showControls && !_isLoading) || _showSubSyncBar || _showTextSyncOverlay,
+            ignoring: (!_showControls && !_isLoading) || _showSubSyncBar || _showTextSyncOverlay || _isLocked,
             child: AnimatedOpacity(
-              opacity: (_showControls || _isLoading) && !_showSubSyncBar && !_showTextSyncOverlay
+              opacity: (_showControls || _isLoading) && !_showSubSyncBar && !_showTextSyncOverlay && !_isLocked
                   ? 1.0
                   : 0.0,
               duration: const Duration(milliseconds: 200),
@@ -1520,6 +1976,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                       onDownload: (_isLoading || isOfflineFile) ? null : _handleDownloadMedia,
                       isDownloading: isDownloading,
                       onCopyStreamUrl: _isLoading ? null : _handleCopyStreamUrl,
+                      onLock: _isMobile ? _lockPlayer : null,
                       onToggleEpisodes: (!_isLoading && widget.detail?.videos.isNotEmpty == true)
                           ? _toggleEpisodesPanel
                           : null,
@@ -1545,9 +2002,9 @@ class _PlayerScreenState extends State<PlayerScreen>
               left: 0,
               right: 0,
               child: IgnorePointer(
-                ignoring: (!_showControls && _activeMenu == null) || _showTextSyncOverlay,
+                ignoring: (!_showControls && _activeMenu == null) || _showTextSyncOverlay || _isLocked,
                 child: AnimatedOpacity(
-                  opacity: (_showControls || _activeMenu != null) && !_showTextSyncOverlay ? 1.0 : 0.0,
+                  opacity: (_showControls || _activeMenu != null) && !_showTextSyncOverlay && !_isLocked ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 200),
                   child: MouseRegion(
                     onEnter: (_) {
@@ -1879,7 +2336,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
 
           // Floating Skip Button (Skip Intro, Skip Recap, Skip Credits, Skip Preview)
-          if (_showSkipButton && _activeSkipSegment != null && !_isLoading && !_showTextSyncOverlay && !_showEpisodesPanel && !_showSourcesPanel)
+          if (_showSkipButton && _activeSkipSegment != null && !_isLoading && !_showTextSyncOverlay && !_showEpisodesPanel && !_showSourcesPanel && !_isLocked)
             Positioned(
               bottom: (_showControls || _activeMenu != null)
                   ? (MediaQuery.paddingOf(context).bottom +
@@ -1899,15 +2356,35 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
 
           // Center Heads-Up Volume Display (HUD)
-          if (_showVolumeHud)
+          if (_showVolumeHud && !_isLocked)
             Positioned.fill(
               child: IgnorePointer(
                 child: _buildVolumeHud(),
               ),
             ),
 
+          // Center Heads-Up Brightness Display (HUD)
+          if (_showBrightnessHud && !_isLocked)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: _buildBrightnessHud(),
+              ),
+            ),
+
+          // 2X Fast-Forward Indicator (HUD)
+          if (_isFastForwarding && !_isLocked)
+            _buildFastForwardHud(),
+
+          // Left Mobile Lock Button
+          if (_isMobile && !_isLocked && _showControls && !_isLoading)
+            _buildMobileLeftLockButton(),
+
+          // Mobile Unlock Button
+          if (_isLocked)
+            _buildMobileUnlockButton(),
+
           // Center Heads-Up Audio Display (HUD)
-          if (_showAudioHud)
+          if (_showAudioHud && !_isLocked)
             Positioned.fill(
               child: IgnorePointer(
                 child: _buildAudioHud(),
@@ -1915,7 +2392,7 @@ class _PlayerScreenState extends State<PlayerScreen>
             ),
 
           // Center Heads-Up Aspect Ratio / Crop Display (HUD)
-          if (_showAspectHud)
+          if (_showAspectHud && !_isLocked)
             Positioned.fill(
               child: IgnorePointer(
                 child: _buildAspectHud(),
@@ -2046,6 +2523,291 @@ class _PlayerScreenState extends State<PlayerScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrightnessHud() {
+    final pct = (_brightness * 100).round();
+    final isBoosting = _brightness > 1.001;
+    final boostColor = _brightness > 1.35
+        ? const Color(0xFFFFD600)
+        : const Color(0xFF00E5FF);
+
+    IconData bIcon;
+    if (_brightness <= 0.05) {
+      bIcon = Icons.brightness_2_rounded;
+    } else if (_brightness < 0.6) {
+      bIcon = Icons.brightness_medium_rounded;
+    } else {
+      bIcon = Icons.brightness_high_rounded;
+    }
+
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F1117).withValues(alpha: 0.88),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isBoosting
+                ? boostColor.withValues(alpha: 0.45)
+                : Colors.white.withValues(alpha: 0.15),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isBoosting ? boostColor.withValues(alpha: 0.25) : Colors.black54,
+              blurRadius: 30,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  bIcon,
+                  color: isBoosting ? boostColor : Colors.white,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '$pct%',
+                  style: TextStyle(
+                    color: isBoosting ? boostColor : Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                if (isBoosting) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: boostColor.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: boostColor.withValues(alpha: 0.4), width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 13, color: boostColor),
+                        const SizedBox(width: 2),
+                        Text(
+                          'BOOST',
+                          style: TextStyle(
+                            color: boostColor,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 140,
+              height: 6,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: Stack(
+                  children: [
+                    Container(color: Colors.white.withValues(alpha: 0.15)),
+                    FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: (_brightness / 1.5).clamp(0.0, 1.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: isBoosting
+                              ? LinearGradient(
+                                  colors: [
+                                    Colors.white,
+                                    const Color(0xFF00E5FF),
+                                    if (_brightness > 1.35) const Color(0xFFFFD600),
+                                  ],
+                                )
+                              : null,
+                          color: isBoosting ? null : Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFastForwardHud() {
+    return Positioned(
+      top: 54,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F1117).withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: const Color(0xFF00E5FF).withValues(alpha: 0.55),
+              width: 1.4,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF00E5FF).withValues(alpha: 0.28),
+                blurRadius: 20,
+                spreadRadius: 1,
+              ),
+              const BoxShadow(
+                color: Colors.black54,
+                blurRadius: 16,
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.fast_forward_rounded, color: Color(0xFF00E5FF), size: 22),
+              SizedBox(width: 8),
+              Text(
+                '2X Speed',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileLeftLockButton() {
+    return Positioned(
+      left: 28,
+      top: 0,
+      bottom: 0,
+      child: Center(
+        child: IgnorePointer(
+          ignoring: !_showControls || _isLoading,
+          child: AnimatedOpacity(
+            opacity: _showControls && !_isLoading ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 200),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _lockPlayer,
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F1117).withValues(alpha: 0.80),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        blurRadius: 16,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.lock_outline_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileUnlockButton() {
+    return Positioned(
+      left: 28,
+      top: 0,
+      bottom: 0,
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: _showUnlockButton ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 220),
+          child: IgnorePointer(
+            ignoring: !_showUnlockButton,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _unlockPlayer,
+                borderRadius: BorderRadius.circular(28),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F1117).withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: const Color(0xFF00E5FF).withValues(alpha: 0.8),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00E5FF).withValues(alpha: 0.35),
+                        blurRadius: 24,
+                        spreadRadius: 2,
+                      ),
+                      const BoxShadow(
+                        color: Colors.black87,
+                        blurRadius: 20,
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_open_rounded,
+                        color: Color(0xFF00E5FF),
+                        size: 22,
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Unlock',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

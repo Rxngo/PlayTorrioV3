@@ -839,6 +839,7 @@ class ContinueWatchingService {
         year: int.tryParse(item.year ?? ''),
         season: item.season,
         episode: item.episode,
+        genres: movieDetail.genres,
       );
 
       final completer = Completer<void>();
